@@ -6,55 +6,84 @@ import FeedLog from '@/components/FeedLog';
 import FavoriteHens from '@/components/FavoriteHens';
 import WeightTracker from '@/components/WeightTracker';
 
+
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-yellow-100 via-orange-50 to-red-100 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-amber-900 mb-2">
-            🐓 CoopKeeper
-          </h1>
-          <p className="text-lg text-amber-800">
-            Your complete chicken coop management tracker
-          </p>
+    <>
+      {/* Farm Background */}
+      <div className="farm-background" />
+      <div className="farm-overlay" />
+
+      <main className="relative min-h-screen pt-16 pb-16 px-4">
+        <div className="max-w-7xl mx-auto">
+          {/* Hero Section */}
+          <div className="hero-section mb-24">
+         
+            {/* Main Title */}
+            <h1 className="hero-title mb-6 drop-shadow-2xl">
+              🐓 CoopKeeper
+            </h1>
+
+            {/* Subtitle */}
+            <p className="hero-subtitle">
+              Your complete chicken coop management dashboard
+            </p>
+
+            {/* Description */}
+            <p className="hero-description">
+              Track your flock, egg production, feeding, cleaning, and health from one beautiful place.
+            </p>
+
+          </div>
+
+          {/* Grid Layout with Farm Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            {/* Favorite Hens */}
+            <div className="md:col-span-2 lg:col-span-1">
+              <div className="farm-card p-6 h-full">
+                <FavoriteHens />
+              </div>
+            </div>
+
+            {/* Egg Tracker */}
+            <div>
+              <div className="farm-card p-6 h-full">
+                <EggTracker />
+              </div>
+            </div>
+
+            {/* Weight Tracker */}
+            <div>
+              <div className="farm-card p-6 h-full">
+                <WeightTracker />
+              </div>
+            </div>
+
+            {/* Feed Log */}
+            <div className="md:col-span-2 lg:col-span-1">
+              <div className="farm-card p-6 h-full">
+                <FeedLog />
+              </div>
+            </div>
+
+            {/* Cleaning Log */}
+            <div className="md:col-span-2 lg:col-span-2">
+              <div className="farm-card p-6 h-full">
+                <CleaningLog />
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="text-center pb-8">
+            <div className="inline-block farm-card px-6 py-4">
+              <p className="text-amber-900 text-sm font-medium">
+                💾 All your data is safely saved locally in your browser
+              </p>
+            </div>
+          </div>
         </div>
-
-        {/* Grid Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Favorite Hens - Spans full width on mobile */}
-          <div className="md:col-span-2 lg:col-span-1">
-            <FavoriteHens />
-          </div>
-
-          {/* Egg Tracker */}
-          <div>
-            <EggTracker />
-          </div>
-
-          {/* Weight Tracker */}
-          <div>
-            <WeightTracker />
-          </div>
-
-          {/* Feed Log */}
-          <div className="md:col-span-2 lg:col-span-1">
-            <FeedLog />
-          </div>
-
-          {/* Cleaning Log */}
-          <div className="md:col-span-2 lg:col-span-2">
-            <CleaningLog />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center mt-12 pb-8">
-          <p className="text-amber-800 text-sm">
-            💾 Data saved locally in your browser
-          </p>
-        </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }

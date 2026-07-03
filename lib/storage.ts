@@ -1,4 +1,4 @@
-import { AppData, EggData, CleaningData, FeedData, HensData, WeightData } from './types';
+import { AppData } from './types';
 
 const STORAGE_KEY = 'coopkeeper-data';
 
@@ -124,7 +124,7 @@ export function getFeedEntries(): AppData['feed']['entries'] {
 }
 
 // Favorite Hens utilities
-export function addHen(name: string, breed: string, notes: string = ''): void {
+export function addHen(name: string, breed: string, notes: string = '', hatchDate?: string): void {
   const data = getAppData();
   data.hens.hens.push({
     id: Date.now().toString(),
@@ -132,6 +132,7 @@ export function addHen(name: string, breed: string, notes: string = ''): void {
     breed,
     isFavorite: false,
     notes,
+    hatchDate,
   });
   saveAppData(data);
 }

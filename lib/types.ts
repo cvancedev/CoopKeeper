@@ -39,6 +39,7 @@ export interface Hen {
   breed: string;
   isFavorite: boolean;
   notes: string;
+  hatchDate?: string; // ISO date string (YYYY-MM-DD), optional for backward compat
 }
 
 export interface HensData {

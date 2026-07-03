@@ -1,18 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CleaningEntry } from '@/lib/types';
 import { getCleaningEntries, addCleaningEntry, removeCleaningEntry } from '@/lib/storage';
+import { useHydrated } from '@/lib/hooks';
+import { Droplets, Trash2, Clock } from 'lucide-react';
 
 export default function CleaningLog() {
-  const [entries, setEntries] = useState<CleaningEntry[]>([]);
+  const [entries, setEntries] = useState<CleaningEntry[]>(() =>
+    typeof window === 'undefined' ? [] : getCleaningEntries()
+  );
   const [notes, setNotes] = useState('');
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  useEffect(() => {
-    setEntries(getCleaningEntries());
-    setIsHydrated(true);
-  }, []);
+  const isHydrated = useHydrated();
 
   const handleAddEntry = () => {
     if (notes.trim()) {
@@ -30,49 +29,53 @@ export default function CleaningLog() {
   if (!isHydrated) return null;
 
   return (
-    <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 shadow-md">
-      <h2 className="text-2xl font-bold text-green-900 mb-4">🧹 Cleaning Log</h2>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 mb-6">
+        <Droplets className="w-6 h-6 text-green-700" />
+        <h2 className="text-2xl font-bold text-green-900">Cleaning Log</h2>
+      </div>
       
-      <div className="bg-white rounded p-4 border border-green-100">
+      <div className="bg-linear-to-br from-emerald-50 to-green-50 rounded-lg p-4 border border-green-100">
         <div className="mb-4">
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Enter cleaning notes (e.g., 'Changed water, swept coop')"
-            className="w-full px-3 py-2 border border-green-200 rounded focus:outline-none focus:border-green-400 resize-none"
+            className="w-full px-3 py-2 border border-green-200 rounded-lg focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-200 resize-none bg-white text-green-900 placeholder-green-400 transition"
             rows={3}
           />
           <button
             onClick={handleAddEntry}
-            className="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
+            className="mt-2 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 active:scale-95 transition font-medium w-full"
           >
             Log Entry
           </button>
         </div>
 
         <div className="max-h-64 overflow-y-auto">
-          <h3 className="font-semibold text-green-900 mb-2 text-sm">Recent Entries</h3>
+          <h3 className="font-semibold text-green-900 mb-3 text-sm uppercase tracking-wide">Recent Entries</h3>
           {entries.length === 0 ? (
-            <p className="text-green-700 text-sm">No cleaning entries yet</p>
+            <p className="text-green-700 text-sm italic">No cleaning entries yet</p>
           ) : (
             <div className="space-y-2">
               {entries.map(entry => (
                 <div
                   key={entry.id}
-                  className="bg-green-100 p-3 rounded border border-green-200"
+                  className="bg-white rounded-lg p-3 border border-green-100 hover:border-green-300 transition"
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <p className="text-xs text-green-600 font-semibold">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 text-xs text-green-600 font-semibold mb-1">
+                        <Clock className="w-3 h-3" />
                         {new Date(entry.date).toLocaleDateString()} {new Date(entry.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </p>
-                      <p className="text-green-900 text-sm mt-1">{entry.notes}</p>
+                      </div>
+                      <p className="text-green-900 text-sm wrap-break-words">{entry.notes}</p>
                     </div>
                     <button
                       onClick={() => handleRemove(entry.id)}
-                      className="text-green-600 hover:text-green-900 font-bold ml-2"
+                      className="text-green-600 hover:text-red-600 p-1 hover:bg-red-50 rounded transition shrink-0"
                     >
-                      ✕
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
