@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Hen } from '@/lib/types';
-import { useHydrated } from '@/lib/hooks';
+import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import {
   getHens,
   addHen,
@@ -29,9 +29,7 @@ function calcAge(hatchDate?: string): string {
 }
 
 export default function FavoriteHens() {
-  const [hens, setHens] = useState<Hen[]>(() =>
-    typeof window === 'undefined' ? [] : getHens()
-  );
+  const hens = useSyncedStorageValue(getHens);
   const [newName, setNewName] = useState('');
   const [newBreed, setNewBreed] = useState('');
   const [newHatchDate, setNewHatchDate] = useState('');
@@ -42,7 +40,6 @@ export default function FavoriteHens() {
   const handleAddHen = () => {
     if (newName.trim() && newBreed.trim()) {
       addHen(newName, newBreed, '', newHatchDate || undefined);
-      setHens(getHens());
       setNewName('');
       setNewBreed('');
       setNewHatchDate('');
@@ -51,17 +48,14 @@ export default function FavoriteHens() {
 
   const handleRemoveHen = (id: string) => {
     removeHen(id);
-    setHens(getHens());
   };
 
   const handleToggleFavorite = (id: string) => {
     toggleHenFavorite(id);
-    setHens(getHens());
   };
 
   const handleSaveNotes = (id: string) => {
     updateHenNotes(id, editingNotes);
-    setHens(getHens());
     setEditingId(null);
     setEditingNotes('');
   };

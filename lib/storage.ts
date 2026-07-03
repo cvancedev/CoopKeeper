@@ -1,4 +1,5 @@
 import { AppData } from './types';
+import { APP_DATA_UPDATED_EVENT, APP_STORAGE_KEY, createDefaultAppData, normalizeAppData } from './appData';
 import {
   getTodayDateString,
   getCurrentLocalDateTimeString,
@@ -6,44 +7,19 @@ import {
   parseLocalDateTime,
   getThisWeekRange,
 } from './dateUtils';
+import { saveAppDataToFirestore, loadAppDataFromFirestore } from './firestore';
 
-const STORAGE_KEY = 'coopkeeper-data';
-
-// Initialize default app data
-const defaultAppData: AppData = {
-  eggs: { entries: [] },
-  cleaning: { entries: [] },
-  feed: { entries: [] },
-  hens: { hens: [] },
-  weights: { entries: [] },
-  health: { entries: [] },
-  expenses: { entries: [] },
-  tasks: { tasks: [] },
-};
+const defaultAppData: AppData = createDefaultAppData();
 
 // Get all app data from localStorage
 export function getAppData(): AppData {
   if (typeof window === 'undefined') return defaultAppData;
   
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
+    const data = localStorage.getItem(APP_STORAGE_KEY);
     if (!data) return defaultAppData;
-    
-    // Parse and merge with defaults to ensure all fields exist
-    const parsed = JSON.parse(data);
-    const appData = {
-      eggs: { entries: [...(parsed.eggs?.entries ?? [])] },
-      cleaning: { entries: [...(parsed.cleaning?.entries ?? [])] },
-      feed: { entries: [...(parsed.feed?.entries ?? [])] },
-      hens: { hens: [...(parsed.hens?.hens ?? [])] },
-      weights: { entries: [...(parsed.weights?.entries ?? [])] },
-      health: { entries: [...(parsed.health?.entries ?? [])] },
-      expenses: { entries: [...(parsed.expenses?.entries ?? [])] },
-      tasks: {
-        tasks: [...(parsed.tasks?.tasks ?? [])],
-        lastResetDate: parsed.tasks?.lastResetDate,
-      },
-    };
+
+    const appData = normalizeAppData(JSON.parse(data));
     
     // Reset task completion status if it's a new day
     resetDailyTasksIfNeeded(appData);
@@ -60,11 +36,22 @@ export function saveAppData(data: AppData): void {
   if (typeof window === 'undefined') return;
   
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    window.dispatchEvent(new Event('coopkeeper-data-updated'));
+    localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(data));
+    window.dispatchEvent(new Event(APP_DATA_UPDATED_EVENT));
+    void saveAppDataToFirestore(data);
   } catch (error) {
     console.error('Error writing to localStorage:', error);
   }
+}
+
+export async function bootstrapCloudAppData(): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  const remoteData = await loadAppDataFromFirestore();
+  if (!remoteData) return;
+
+  localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(remoteData));
+  window.dispatchEvent(new Event(APP_DATA_UPDATED_EVENT));
 }
 
 // Egg Tracker utilities

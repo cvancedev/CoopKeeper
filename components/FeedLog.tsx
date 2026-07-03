@@ -1,31 +1,26 @@
 'use client';
 
 import { useState } from 'react';
-import { FeedEntry } from '@/lib/types';
 import { getFeedEntries, addFeedEntry, removeFeedEntry } from '@/lib/storage';
-import { useHydrated } from '@/lib/hooks';
+import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { formatDate } from '@/lib/dateUtils';
 import { Leaf, Trash2, Calendar } from 'lucide-react';
 
 const FEED_TYPES = ['Pellets', 'Scratch', 'Treats', 'Vegetables', 'Other'];
 
 export default function FeedLog() {
-  const [entries, setEntries] = useState<FeedEntry[]>(() =>
-    typeof window === 'undefined' ? [] : getFeedEntries()
-  );
+  const entries = useSyncedStorageValue(getFeedEntries);
   const [feedType, setFeedType] = useState(FEED_TYPES[0]);
   const [notes, setNotes] = useState('');
   const isHydrated = useHydrated();
 
   const handleAddEntry = () => {
     addFeedEntry(feedType, notes);
-    setEntries(getFeedEntries());
     setNotes('');
   };
 
   const handleRemove = (id: string) => {
     removeFeedEntry(id);
-    setEntries(getFeedEntries());
   };
 
   if (!isHydrated) return null;

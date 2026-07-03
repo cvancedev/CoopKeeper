@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { ExpenseEntry, ExpenseCategory } from '@/lib/types';
+import { ExpenseCategory } from '@/lib/types';
 import { addExpense, getExpenses, removeExpense } from '@/lib/storage';
-import { useHydrated } from '@/lib/hooks';
+import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { getTodayDateString, formatDate, parseLocalDate } from '@/lib/dateUtils';
 import { ReceiptText, Trash2, Calendar, DollarSign } from 'lucide-react';
 
@@ -39,9 +39,7 @@ function isThisMonth(dateString: string): boolean {
 }
 
 export default function ExpenseTracker() {
-  const [entries, setEntries] = useState<ExpenseEntry[]>(() =>
-    typeof window === 'undefined' ? [] : getExpenses()
-  );
+  const entries = useSyncedStorageValue(getExpenses);
   const [date, setDate] = useState(getTodayDateString());
   const [category, setCategory] = useState<ExpenseCategory>('Feed');
   const [description, setDescription] = useState('');
@@ -86,7 +84,6 @@ export default function ExpenseTracker() {
       parsedAmount,
       notes.trim()
     );
-    setEntries(getExpenses());
     setDate(getTodayDateString());
     setCategory('Feed');
     setDescription('');
@@ -96,7 +93,6 @@ export default function ExpenseTracker() {
 
   const handleRemove = (id: string) => {
     removeExpense(id);
-    setEntries(getExpenses());
   };
 
   if (!isHydrated) return null;

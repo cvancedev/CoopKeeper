@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 import EggTracker from '@/components/EggTracker';
 import CleaningLog from '@/components/CleaningLog';
 import FeedLog from '@/components/FeedLog';
@@ -9,9 +11,14 @@ import HealthLog from '@/components/HealthLog';
 import DashboardOverview from '@/components/DashboardOverview';
 import FarmTasks from '@/components/FarmTasks';
 import ExpenseTracker from '@/components/ExpenseTracker';
+import { bootstrapCloudAppData } from '@/lib/storage';
 
 
 export default function Home() {
+  useEffect(() => {
+    void bootstrapCloudAppData();
+  }, []);
+
   return (
     <>
       {/* Farm Background */}

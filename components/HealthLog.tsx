@@ -1,14 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Hen, HealthEntry } from '@/lib/types';
 import {
   getHens,
   getHealthEntries,
   addHealthEntry,
   removeHealthEntry,
 } from '@/lib/storage';
-import { useHydrated } from '@/lib/hooks';
+import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { getTodayDateString, formatDate } from '@/lib/dateUtils';
 import { Heart, Trash2, Calendar, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 
@@ -48,12 +47,8 @@ function getCategoryColor(category: string): string {
 }
 
 export default function HealthLog() {
-  const [hens] = useState<Hen[]>(() =>
-    typeof window === 'undefined' ? [] : getHens()
-  );
-  const [entries, setEntries] = useState<HealthEntry[]>(() =>
-    typeof window === 'undefined' ? [] : getHealthEntries()
-  );
+  const hens = useSyncedStorageValue(getHens);
+  const entries = useSyncedStorageValue(getHealthEntries);
 
   const [selectedHenId, setSelectedHenId] = useState('');
   const [date, setDate] = useState(getTodayDateString());
@@ -87,7 +82,6 @@ export default function HealthLog() {
           followUpDate || undefined,
           notes
         );
-        setEntries(getHealthEntries());
         setSymptoms('');
         setTreatment('');
         setMedicationName('');
@@ -101,7 +95,6 @@ export default function HealthLog() {
 
   const handleRemove = (id: string) => {
     removeHealthEntry(id);
-    setEntries(getHealthEntries());
   };
 
   if (!isHydrated) return null;

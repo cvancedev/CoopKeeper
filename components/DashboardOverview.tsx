@@ -1,9 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useEffect } from 'react';
 import React from 'react';
-import { useHydrated } from '@/lib/hooks';
+import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { getDashboardStats, getFarmTasks, getTaskStats } from '@/lib/storage';
 import { formatDate } from '@/lib/dateUtils';
 import { Egg, Heart, Droplets, Leaf, Scale, CheckCircle2, Circle, Wallet } from 'lucide-react';
@@ -38,30 +36,13 @@ const StatCard = ({
 );
 
 export default function DashboardOverview() {
-  const [stats, setStats] = useState(() =>
-    typeof window === 'undefined' ? null : getDashboardStats()
-  );
-  const [tasks, setTasks] = useState(() =>
-    typeof window === 'undefined' ? [] : getFarmTasks()
-  );
-  const [taskStats, setTaskStats] = useState(() =>
-    typeof window === 'undefined' ? { completed: 0, remaining: 0 } : getTaskStats()
-  );
+  const stats = useSyncedStorageValue(getDashboardStats);
+  const tasks = useSyncedStorageValue(getFarmTasks);
+  const taskStats = useSyncedStorageValue(getTaskStats);
 
   const isHydrated = useHydrated();
 
-  useEffect(() => {
-    const refreshStats = () => {
-      setStats(getDashboardStats());
-      setTasks(getFarmTasks());
-      setTaskStats(getTaskStats());
-    };
-
-    window.addEventListener('coopkeeper-data-updated', refreshStats);
-    return () => window.removeEventListener('coopkeeper-data-updated', refreshStats);
-  }, []);
-
-  if (!isHydrated || !stats) return null;
+  if (!isHydrated) return null;
 
   // Get incomplete tasks for display (first 3)
   const incompleteTasks = tasks.filter(t => !t.completed).slice(0, 3);

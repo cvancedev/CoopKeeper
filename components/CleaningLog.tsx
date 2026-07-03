@@ -1,30 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import { CleaningEntry } from '@/lib/types';
 import { getCleaningEntries, addCleaningEntry, removeCleaningEntry } from '@/lib/storage';
-import { useHydrated } from '@/lib/hooks';
+import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { formatDate } from '@/lib/dateUtils';
 import { Droplets, Trash2, Clock } from 'lucide-react';
 
 export default function CleaningLog() {
-  const [entries, setEntries] = useState<CleaningEntry[]>(() =>
-    typeof window === 'undefined' ? [] : getCleaningEntries()
-  );
+  const entries = useSyncedStorageValue(getCleaningEntries);
   const [notes, setNotes] = useState('');
   const isHydrated = useHydrated();
 
   const handleAddEntry = () => {
     if (notes.trim()) {
       addCleaningEntry(notes);
-      setEntries(getCleaningEntries());
       setNotes('');
     }
   };
 
   const handleRemove = (id: string) => {
     removeCleaningEntry(id);
-    setEntries(getCleaningEntries());
   };
 
   if (!isHydrated) return null;

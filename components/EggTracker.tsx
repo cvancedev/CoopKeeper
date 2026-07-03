@@ -1,19 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { EggEntry } from '@/lib/types';
 import { getEggEntries, getWeeklyEggTotal, addEggEntry, removeEggEntry } from '@/lib/storage';
-import { useHydrated } from '@/lib/hooks';
+import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { getTodayDateString, formatDate, parseLocalDate } from '@/lib/dateUtils';
 import { Egg, Trash2 } from 'lucide-react';
 
 export default function EggTracker() {
-  const [entries, setEntries] = useState<EggEntry[]>(() =>
-    typeof window === 'undefined' ? [] : getEggEntries()
-  );
-  const [weeklyTotal, setWeeklyTotal] = useState(() =>
-    typeof window === 'undefined' ? 0 : getWeeklyEggTotal()
-  );
+  const entries = useSyncedStorageValue(getEggEntries);
+  const weeklyTotal = useSyncedStorageValue(getWeeklyEggTotal);
   const [inputValue, setInputValue] = useState('');
   const isHydrated = useHydrated();
 
@@ -21,16 +16,12 @@ export default function EggTracker() {
     const count = parseInt(inputValue) || 0;
     if (count > 0) {
       addEggEntry(count);
-      setEntries(getEggEntries());
-      setWeeklyTotal(getWeeklyEggTotal());
       setInputValue('');
     }
   };
 
   const handleRemove = (id: string) => {
     removeEggEntry(id);
-    setEntries(getEggEntries());
-    setWeeklyTotal(getWeeklyEggTotal());
   };
 
   if (!isHydrated) return null;

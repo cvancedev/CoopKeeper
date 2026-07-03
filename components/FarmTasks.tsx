@@ -1,15 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { FarmTask } from '@/lib/types';
 import { getFarmTasks, addFarmTask, removeFarmTask, toggleFarmTask, getTaskStats } from '@/lib/storage';
-import { useHydrated } from '@/lib/hooks';
+import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { CheckCircle2, Circle, Trash2, Plus } from 'lucide-react';
 
 export default function FarmTasks() {
-  const [tasks, setTasks] = useState<FarmTask[]>(() =>
-    typeof window === 'undefined' ? [] : getFarmTasks()
-  );
+  const tasks = useSyncedStorageValue(getFarmTasks);
   const [newTaskTitle, setNewTaskTitle] = useState('');
 
   const isHydrated = useHydrated();
@@ -17,22 +14,19 @@ export default function FarmTasks() {
   const handleAddTask = () => {
     if (newTaskTitle.trim()) {
       addFarmTask(newTaskTitle);
-      setTasks(getFarmTasks());
       setNewTaskTitle('');
     }
   };
 
   const handleToggle = (id: string) => {
     toggleFarmTask(id);
-    setTasks(getFarmTasks());
   };
 
   const handleRemove = (id: string) => {
     removeFarmTask(id);
-    setTasks(getFarmTasks());
   };
 
-  const { completed, remaining } = getTaskStats();
+  const { completed, remaining } = useSyncedStorageValue(getTaskStats);
 
   if (!isHydrated) return null;
 

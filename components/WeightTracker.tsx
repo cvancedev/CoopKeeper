@@ -1,39 +1,30 @@
 'use client';
 
 import { useState } from 'react';
-import { Hen, WeightEntry } from '@/lib/types';
+import { WeightEntry } from '@/lib/types';
 import { getHens, getWeightEntries, addWeightEntry, removeWeightEntry } from '@/lib/storage';
-import { useHydrated } from '@/lib/hooks';
+import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { formatDate, parseLocalDate } from '@/lib/dateUtils';
 import { Scale, Trash2, TrendingUp } from 'lucide-react';
 
 export default function WeightTracker() {
-  const [entries, setEntries] = useState<WeightEntry[]>(() =>
-    typeof window === 'undefined' ? [] : getWeightEntries()
-  );
-  const [hens] = useState<Hen[]>(() =>
-    typeof window === 'undefined' ? [] : getHens()
-  );
-  const [selectedHen, setSelectedHen] = useState(() => {
-    if (typeof window === 'undefined') return '';
-    const list = getHens();
-    return list.length > 0 ? list[0].name : '';
-  });
+  const entries = useSyncedStorageValue(getWeightEntries);
+  const hens = useSyncedStorageValue(getHens);
+  const [selectedHen, setSelectedHen] = useState('');
   const [weight, setWeight] = useState('');
   const isHydrated = useHydrated();
+  const activeHen = selectedHen || hens[0]?.name || '';
 
   const handleAddEntry = () => {
     const weightNum = parseFloat(weight);
-    if (selectedHen && weightNum > 0) {
-      addWeightEntry(selectedHen, weightNum);
-      setEntries(getWeightEntries());
+    if (activeHen && weightNum > 0) {
+      addWeightEntry(activeHen, weightNum);
       setWeight('');
     }
   };
 
   const handleRemove = (id: string) => {
     removeWeightEntry(id);
-    setEntries(getWeightEntries());
   };
 
   if (!isHydrated) return null;
@@ -64,7 +55,7 @@ export default function WeightTracker() {
                 Select Hen
               </label>
               <select
-                value={selectedHen}
+                value={activeHen}
                 onChange={(e) => setSelectedHen(e.target.value)}
                 className="w-full px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm bg-white text-blue-900 transition"
               >
