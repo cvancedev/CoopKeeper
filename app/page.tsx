@@ -5,6 +5,7 @@ import CleaningLog from '@/components/CleaningLog';
 import FeedLog from '@/components/FeedLog';
 import FavoriteHens from '@/components/FavoriteHens';
 import WeightTracker from '@/components/WeightTracker';
+import HealthLog from '@/components/HealthLog';
 
 
 export default function Home() {
@@ -70,6 +71,13 @@ export default function Home() {
             <div className="md:col-span-2 lg:col-span-2">
               <div className="farm-card p-6 h-full">
                 <CleaningLog />
+              </div>
+            </div>
+
+            {/* Health Log */}
+            <div className="md:col-span-2 lg:col-span-2">
+              <div className="farm-card p-6 h-full">
+                <HealthLog />
               </div>
             </div>
           </div>

@@ -9,6 +9,7 @@ const defaultAppData: AppData = {
   feed: { entries: [] },
   hens: { hens: [] },
   weights: { entries: [] },
+  health: { entries: [] },
 };
 
 // Get all app data from localStorage
@@ -17,7 +18,18 @@ export function getAppData(): AppData {
   
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : defaultAppData;
+    if (!data) return defaultAppData;
+    
+    // Parse and merge with defaults to ensure all fields exist
+    const parsed = JSON.parse(data);
+    return {
+      eggs: { entries: [...(parsed.eggs?.entries ?? [])] },
+      cleaning: { entries: [...(parsed.cleaning?.entries ?? [])] },
+      feed: { entries: [...(parsed.feed?.entries ?? [])] },
+      hens: { hens: [...(parsed.hens?.hens ?? [])] },
+      weights: { entries: [...(parsed.weights?.entries ?? [])] },
+      health: { entries: [...(parsed.health?.entries ?? [])] },
+    };
   } catch (error) {
     console.error('Error reading from localStorage:', error);
     return defaultAppData;
@@ -94,7 +106,8 @@ export function removeCleaningEntry(id: string): void {
 }
 
 export function getCleaningEntries(): AppData['cleaning']['entries'] {
-  return getAppData().cleaning.entries.sort(
+  const entries = getAppData().cleaning.entries;
+  return [...entries].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 }
@@ -118,7 +131,8 @@ export function removeFeedEntry(id: string): void {
 }
 
 export function getFeedEntries(): AppData['feed']['entries'] {
-  return getAppData().feed.entries.sort(
+  const entries = getAppData().feed.entries;
+  return [...entries].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 }
@@ -188,11 +202,64 @@ export function removeWeightEntry(id: string): void {
 }
 
 export function getWeightEntries(): AppData['weights']['entries'] {
-  return getAppData().weights.entries.sort(
+  const entries = getAppData().weights.entries;
+  return [...entries].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 }
 
 export function getHenWeights(henName: string): AppData['weights']['entries'] {
   return getWeightEntries().filter(e => e.henName === henName);
+}
+
+// Health Log utilities
+export function addHealthEntry(
+  henId: string,
+  henName: string,
+  date: string,
+  category: 'Illness' | 'Injury' | 'Medication' | 'Vaccine' | 'Checkup' | 'Other',
+  symptoms: string,
+  treatment: string,
+  status: 'Watching' | 'Treated' | 'Recovered',
+  vetContacted: boolean,
+  medicationName?: string,
+  dosage?: string,
+  followUpDate?: string,
+  notes: string = ''
+): void {
+  const data = getAppData();
+  data.health.entries.push({
+    id: Date.now().toString(),
+    henId,
+    henName,
+    date,
+    category,
+    symptoms,
+    treatment,
+    medicationName,
+    dosage,
+    vetContacted,
+    followUpDate,
+    status,
+    notes,
+    createdAt: new Date().toISOString(),
+  });
+  saveAppData(data);
+}
+
+export function removeHealthEntry(id: string): void {
+  const data = getAppData();
+  data.health.entries = data.health.entries.filter(e => e.id !== id);
+  saveAppData(data);
+}
+
+export function getHealthEntries(): AppData['health']['entries'] {
+  const entries = getAppData().health?.entries ?? [];
+  return [...entries].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+}
+
+export function getHenHealthEntries(henId: string): AppData['health']['entries'] {
+  return getHealthEntries().filter(e => e.henId === henId);
 }

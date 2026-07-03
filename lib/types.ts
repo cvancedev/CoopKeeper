@@ -58,6 +58,28 @@ export interface WeightData {
   entries: WeightEntry[];
 }
 
+// Health Log Types
+export interface HealthEntry {
+  id: string;
+  henId: string;
+  henName: string;
+  date: string;
+  category: 'Illness' | 'Injury' | 'Medication' | 'Vaccine' | 'Checkup' | 'Other';
+  symptoms: string;
+  treatment: string;
+  medicationName?: string;
+  dosage?: string;
+  vetContacted: boolean;
+  followUpDate?: string;
+  status: 'Watching' | 'Treated' | 'Recovered';
+  notes: string;
+  createdAt: string;
+}
+
+export interface HealthData {
+  entries: HealthEntry[];
+}
+
 // Combined App State
 export interface AppData {
   eggs: EggData;
@@ -65,4 +87,5 @@ export interface AppData {
   feed: FeedData;
   hens: HensData;
   weights: WeightData;
+  health: HealthData;
 }
