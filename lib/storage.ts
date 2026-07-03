@@ -1,4 +1,10 @@
 import { AppData } from './types';
+import {
+  getTodayDateString,
+  getCurrentLocalDateTimeString,
+  parseLocalDate,
+  getThisWeekRange,
+} from './dateUtils';
 
 const STORAGE_KEY = 'coopkeeper-data';
 
@@ -10,6 +16,7 @@ const defaultAppData: AppData = {
   hens: { hens: [] },
   weights: { entries: [] },
   health: { entries: [] },
+  tasks: { tasks: [] },
 };
 
 // Get all app data from localStorage
@@ -22,14 +29,23 @@ export function getAppData(): AppData {
     
     // Parse and merge with defaults to ensure all fields exist
     const parsed = JSON.parse(data);
-    return {
+    const appData = {
       eggs: { entries: [...(parsed.eggs?.entries ?? [])] },
       cleaning: { entries: [...(parsed.cleaning?.entries ?? [])] },
       feed: { entries: [...(parsed.feed?.entries ?? [])] },
       hens: { hens: [...(parsed.hens?.hens ?? [])] },
       weights: { entries: [...(parsed.weights?.entries ?? [])] },
       health: { entries: [...(parsed.health?.entries ?? [])] },
+      tasks: {
+        tasks: [...(parsed.tasks?.tasks ?? [])],
+        lastResetDate: parsed.tasks?.lastResetDate,
+      },
     };
+    
+    // Reset task completion status if it's a new day
+    resetDailyTasksIfNeeded(appData);
+    
+    return appData;
   } catch (error) {
     console.error('Error reading from localStorage:', error);
     return defaultAppData;
@@ -50,7 +66,7 @@ export function saveAppData(data: AppData): void {
 // Egg Tracker utilities
 export function addEggEntry(count: number): void {
   const data = getAppData();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayDateString();
   
   // Check if entry for today exists
   const existingIndex = data.eggs.entries.findIndex(e => e.date === today);
@@ -80,11 +96,10 @@ export function getEggEntries(): AppData['eggs']['entries'] {
 
 export function getWeeklyEggTotal(): number {
   const data = getAppData();
-  const today = new Date();
-  const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const [weekStart] = getThisWeekRange();
   
   return data.eggs.entries
-    .filter(entry => new Date(entry.date) >= sevenDaysAgo)
+    .filter(entry => entry.date >= weekStart)
     .reduce((sum, entry) => sum + entry.count, 0);
 }
 
@@ -93,7 +108,7 @@ export function addCleaningEntry(notes: string): void {
   const data = getAppData();
   data.cleaning.entries.push({
     id: Date.now().toString(),
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayDateString(),
     notes,
   });
   saveAppData(data);
@@ -108,7 +123,7 @@ export function removeCleaningEntry(id: string): void {
 export function getCleaningEntries(): AppData['cleaning']['entries'] {
   const entries = getAppData().cleaning.entries;
   return [...entries].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
   );
 }
 
@@ -117,7 +132,7 @@ export function addFeedEntry(feedType: string, notes: string): void {
   const data = getAppData();
   data.feed.entries.push({
     id: Date.now().toString(),
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayDateString(),
     feedType,
     notes,
   });
@@ -133,7 +148,7 @@ export function removeFeedEntry(id: string): void {
 export function getFeedEntries(): AppData['feed']['entries'] {
   const entries = getAppData().feed.entries;
   return [...entries].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
   );
 }
 
@@ -189,7 +204,7 @@ export function addWeightEntry(henName: string, weight: number): void {
   data.weights.entries.push({
     id: Date.now().toString(),
     henName,
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayDateString(),
     weight,
   });
   saveAppData(data);
@@ -204,7 +219,7 @@ export function removeWeightEntry(id: string): void {
 export function getWeightEntries(): AppData['weights']['entries'] {
   const entries = getAppData().weights.entries;
   return [...entries].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
   );
 }
 
@@ -242,7 +257,7 @@ export function addHealthEntry(
     followUpDate,
     status,
     notes,
-    createdAt: new Date().toISOString(),
+    createdAt: getCurrentLocalDateTimeString(),
   });
   saveAppData(data);
 }
@@ -256,10 +271,116 @@ export function removeHealthEntry(id: string): void {
 export function getHealthEntries(): AppData['health']['entries'] {
   const entries = getAppData().health?.entries ?? [];
   return [...entries].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
   );
 }
 
 export function getHenHealthEntries(henId: string): AppData['health']['entries'] {
   return getHealthEntries().filter(e => e.henId === henId);
+}
+
+// Farm Tasks utilities
+function resetDailyTasksIfNeeded(data: AppData): void {
+  const today = getTodayDateString();
+  const lastReset = data.tasks.lastResetDate;
+  
+  if (lastReset !== today) {
+    // Reset all task completion status for new day
+    data.tasks.tasks = data.tasks.tasks.map(task => (
+      { ...task, completed: false }
+    ));
+    data.tasks.lastResetDate = today;
+    saveAppData(data);
+  }
+}
+
+export function addFarmTask(title: string): void {
+  const data = getAppData();
+  data.tasks.tasks.push({
+    id: Date.now().toString(),
+    title,
+    completed: false,
+    createdDate: getTodayDateString(),
+  });
+  saveAppData(data);
+}
+
+export function removeFarmTask(id: string): void {
+  const data = getAppData();
+  data.tasks.tasks = data.tasks.tasks.filter(t => t.id !== id);
+  saveAppData(data);
+}
+
+export function toggleFarmTask(id: string): void {
+  const data = getAppData();
+  const task = data.tasks.tasks.find(t => t.id === id);
+  if (task) {
+    task.completed = !task.completed;
+    saveAppData(data);
+  }
+}
+
+export function getFarmTasks(): AppData['tasks']['tasks'] {
+  const data = getAppData();
+  return data.tasks.tasks;
+}
+
+export function getTaskStats(): { completed: number; remaining: number } {
+  const tasks = getFarmTasks();
+  const completed = tasks.filter(t => t.completed).length;
+  return {
+    completed,
+    remaining: tasks.length - completed,
+  };
+}
+
+// Dashboard utilities
+export function getDashboardStats() {
+  const data = getAppData();
+  const today = getTodayDateString();
+  const [weekStart] = getThisWeekRange();
+
+  // Total Hens
+  const totalHens = data.hens.hens.length;
+
+  // Eggs Today
+  const eggsToday = data.eggs.entries
+    .filter(e => e.date === today)
+    .reduce((sum, e) => sum + e.count, 0);
+
+  // Eggs This Week
+  const eggsThisWeek = data.eggs.entries
+    .filter(e => e.date >= weekStart)
+    .reduce((sum, e) => sum + e.count, 0);
+
+  // Active Health Cases (Watching or Treated)
+  const activeHealthCases = data.health.entries.filter(
+    e => e.status === 'Watching' || e.status === 'Treated'
+  ).length;
+
+  // Last Cleaning Date
+  const lastCleaning = [...data.cleaning.entries].sort(
+    (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
+  )[0];
+  const lastCleaningDate = lastCleaning?.date || null;
+
+  // Feed Logs This Week
+  const feedLogsThisWeek = data.feed.entries.filter(
+    e => e.date >= weekStart
+  ).length;
+
+  // Most Recent Weight Entry
+  const mostRecentWeight = [...data.weights.entries].sort(
+    (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
+  )[0];
+
+  return {
+    totalHens,
+    eggsToday,
+    eggsThisWeek,
+    activeHealthCases,
+    lastCleaningDate,
+    feedLogsThisWeek,
+    mostRecentWeight,
+  };
 }

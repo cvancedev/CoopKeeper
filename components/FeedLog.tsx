@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { FeedEntry } from '@/lib/types';
 import { getFeedEntries, addFeedEntry, removeFeedEntry } from '@/lib/storage';
 import { useHydrated } from '@/lib/hooks';
+import { formatDate } from '@/lib/dateUtils';
 import { Leaf, Trash2, Calendar } from 'lucide-react';
 
 const FEED_TYPES = ['Pellets', 'Scratch', 'Treats', 'Vegetables', 'Other'];
@@ -87,7 +88,7 @@ export default function FeedLog() {
                         </span>
                         <span className="text-xs text-orange-600 font-semibold flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {new Date(entry.date).toLocaleDateString()}
+                          {formatDate(entry.date)}
                         </span>
                       </div>
                       {entry.notes && (

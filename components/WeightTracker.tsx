@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Hen, WeightEntry } from '@/lib/types';
 import { getHens, getWeightEntries, addWeightEntry, removeWeightEntry } from '@/lib/storage';
 import { useHydrated } from '@/lib/hooks';
+import { formatDate, parseLocalDate } from '@/lib/dateUtils';
 import { Scale, Trash2, TrendingUp } from 'lucide-react';
 
 export default function WeightTracker() {
@@ -75,7 +76,7 @@ export default function WeightTracker() {
               </select>
             </div>
 
-            <div className="flex gap-2 mb-3">
+            <div className="flex flex-col sm:flex-row gap-2 mb-3">
               <input
                 type="number"
                 step="0.1"
@@ -83,12 +84,12 @@ export default function WeightTracker() {
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
                 placeholder="Weight (lbs/kg)"
-                className="flex-1 px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm bg-white text-blue-900 placeholder-blue-400 transition"
+                className="sm:flex-1 sm:min-w-0 px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm bg-white text-blue-900 placeholder-blue-400 transition"
                 onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
               />
               <button
                 onClick={handleAddEntry}
-                className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 active:scale-95 transition font-medium"
+                className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 active:scale-95 transition font-medium sm:shrink-0"
               >
                 Add
               </button>
@@ -111,14 +112,14 @@ export default function WeightTracker() {
                 </div>
                 <div className="space-y-1">
                   {henEntries
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime())
                     .map(entry => (
                       <div
                         key={entry.id}
                         className="flex justify-between items-center text-xs bg-blue-50 p-2 rounded-lg"
                       >
                         <span className="text-blue-900">
-                          {new Date(entry.date).toLocaleDateString()}: <strong className="text-blue-700">{entry.weight}</strong>
+                          {formatDate(entry.date)}: <strong className="text-blue-700">{entry.weight}</strong>
                         </span>
                         <button
                           onClick={() => handleRemove(entry.id)}

@@ -9,6 +9,7 @@ import {
   removeHealthEntry,
 } from '@/lib/storage';
 import { useHydrated } from '@/lib/hooks';
+import { getTodayDateString, formatDate } from '@/lib/dateUtils';
 import { Heart, Trash2, Calendar, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 
 const CATEGORIES = ['Illness', 'Injury', 'Medication', 'Vaccine', 'Checkup', 'Other'];
@@ -55,7 +56,7 @@ export default function HealthLog() {
   );
 
   const [selectedHenId, setSelectedHenId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getTodayDateString());
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [symptoms, setSymptoms] = useState('');
   const [treatment, setTreatment] = useState('');
@@ -148,7 +149,7 @@ export default function HealthLog() {
                   type="date"
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  max={new Date().toISOString().split('T')[0]}
+                  max={getTodayDateString()}
                   className="w-full px-3 py-2 border border-teal-200 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200 text-sm bg-white text-teal-900 transition"
                 />
               </div>
@@ -318,7 +319,7 @@ export default function HealthLog() {
                     </div>
                     <div className="flex items-center gap-1 text-xs text-teal-600 mb-1">
                       <Calendar className="w-3 h-3" />
-                      {new Date(entry.date).toLocaleDateString()}
+                      {formatDate(entry.date)}
                     </div>
                   </div>
                   <button
@@ -351,7 +352,7 @@ export default function HealthLog() {
                 {entry.followUpDate && (
                   <p className="text-xs text-teal-900 mb-1">
                     <span className="font-semibold">Follow-up:</span>{' '}
-                    {new Date(entry.followUpDate).toLocaleDateString()}
+                    {formatDate(entry.followUpDate)}
                   </p>
                 )}
 

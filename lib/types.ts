@@ -80,6 +80,19 @@ export interface HealthData {
   entries: HealthEntry[];
 }
 
+// Farm Tasks Types
+export interface FarmTask {
+  id: string;
+  title: string;
+  completed: boolean;
+  createdDate: string;
+}
+
+export interface FarmTaskData {
+  tasks: FarmTask[];
+  lastResetDate?: string;
+}
+
 // Combined App State
 export interface AppData {
   eggs: EggData;
@@ -88,4 +101,5 @@ export interface AppData {
   hens: HensData;
   weights: WeightData;
   health: HealthData;
+  tasks: FarmTaskData;
 }

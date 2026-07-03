@@ -6,6 +6,8 @@ import FeedLog from '@/components/FeedLog';
 import FavoriteHens from '@/components/FavoriteHens';
 import WeightTracker from '@/components/WeightTracker';
 import HealthLog from '@/components/HealthLog';
+import DashboardOverview from '@/components/DashboardOverview';
+import FarmTasks from '@/components/FarmTasks';
 
 
 export default function Home() {
@@ -37,8 +39,20 @@ export default function Home() {
 
           </div>
 
+          {/* Dashboard Overview */}
+          <div className="farm-card p-6 mb-12">
+            <DashboardOverview />
+          </div>
+
           {/* Grid Layout with Farm Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            {/* Farm Tasks - First Position */}
+            <div className="md:col-span-2 lg:col-span-1">
+              <div className="farm-card p-6 h-full">
+                <FarmTasks />
+              </div>
+            </div>
+
             {/* Favorite Hens */}
             <div className="md:col-span-2 lg:col-span-1">
               <div className="farm-card p-6 h-full">

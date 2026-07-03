@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CleaningEntry } from '@/lib/types';
 import { getCleaningEntries, addCleaningEntry, removeCleaningEntry } from '@/lib/storage';
 import { useHydrated } from '@/lib/hooks';
+import { formatDate } from '@/lib/dateUtils';
 import { Droplets, Trash2, Clock } from 'lucide-react';
 
 export default function CleaningLog() {
@@ -67,7 +68,7 @@ export default function CleaningLog() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1 text-xs text-green-600 font-semibold mb-1">
                         <Clock className="w-3 h-3" />
-                        {new Date(entry.date).toLocaleDateString()} {new Date(entry.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {formatDate(entry.date)}
                       </div>
                       <p className="text-green-900 text-sm wrap-break-words">{entry.notes}</p>
                     </div>

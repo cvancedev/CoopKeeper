@@ -10,11 +10,12 @@ import {
   toggleHenFavorite,
   updateHenNotes,
 } from '@/lib/storage';
+import { getTodayDateString, parseLocalDate } from '@/lib/dateUtils';
 import { Heart, Trash2, Edit2, Check, X, CalendarDays } from 'lucide-react';
 
 function calcAge(hatchDate?: string): string {
   if (!hatchDate) return 'Age unknown';
-  const birth = new Date(hatchDate);
+  const birth = parseLocalDate(hatchDate);
   const now = new Date();
   const totalMonths =
     (now.getFullYear() - birth.getFullYear()) * 12 +
@@ -105,7 +106,7 @@ export default function FavoriteHens() {
             type="date"
             value={newHatchDate}
             onChange={(e) => setNewHatchDate(e.target.value)}
-            max={new Date().toISOString().split('T')[0]}
+            max={getTodayDateString()}
             className="w-full px-3 py-2 border border-pink-200 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-200 text-sm bg-white text-pink-900 transition"
           />
         </div>

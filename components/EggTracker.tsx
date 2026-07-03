@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { EggEntry } from '@/lib/types';
 import { getEggEntries, getWeeklyEggTotal, addEggEntry, removeEggEntry } from '@/lib/storage';
 import { useHydrated } from '@/lib/hooks';
+import { getTodayDateString, formatDate, parseLocalDate } from '@/lib/dateUtils';
 import { Egg, Trash2 } from 'lucide-react';
 
 export default function EggTracker() {
@@ -35,7 +36,7 @@ export default function EggTracker() {
   if (!isHydrated) return null;
 
   const todayEntry = entries.find(
-    e => e.date === new Date().toISOString().split('T')[0]
+    e => e.date === getTodayDateString()
   );
 
   return (
@@ -57,19 +58,19 @@ export default function EggTracker() {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <input
             type="number"
             min="1"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Number of eggs"
-            className="flex-1 px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition bg-white text-amber-900"
+            className="sm:flex-1 sm:min-w-0 px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition bg-white text-amber-900"
             onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
           />
           <button
             onClick={handleAddEntry}
-            className="px-4 py-2 bg-amber-700 text-white rounded-lg hover:bg-amber-800 active:scale-95 transition font-medium"
+            className="px-4 py-2 bg-amber-700 text-white rounded-lg hover:bg-amber-800 active:scale-95 transition font-medium sm:shrink-0"
           >
             Add
           </button>
@@ -82,14 +83,14 @@ export default function EggTracker() {
           ) : (
             <div className="space-y-2">
               {entries
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime())
                 .map(entry => (
                   <div
                     key={entry.id}
                     className="flex justify-between items-center text-sm bg-white rounded-lg p-3 border border-amber-100 hover:border-amber-300 transition"
                   >
                     <span className="text-amber-900">
-                      {new Date(entry.date).toLocaleDateString()}: <strong className="text-amber-700">{entry.count}</strong>
+                      {formatDate(entry.date)}: <strong className="text-amber-700">{entry.count}</strong>
                     </span>
                     <button
                       onClick={() => handleRemove(entry.id)}
