@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CoopKeeper - Chicken Coop Tracker",
-  description: "A simple, offline-first chicken coop management tracker for tracking eggs, cleaning, feed, favorite hens, and weights.",
+  title: "CluckBook",
+  description: "Your complete chicken coop management dashboard",
 };
 
 export default function RootLayout({
