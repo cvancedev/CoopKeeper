@@ -1,11 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import { useEffect } from 'react';
 import React from 'react';
 import { useHydrated } from '@/lib/hooks';
 import { getDashboardStats, getFarmTasks, getTaskStats } from '@/lib/storage';
 import { formatDate } from '@/lib/dateUtils';
-import { Egg, Heart, Droplets, Leaf, Scale, CheckCircle2, Circle } from 'lucide-react';
+import { Egg, Heart, Droplets, Leaf, Scale, CheckCircle2, Circle, Wallet } from 'lucide-react';
+
+const formatUSD = (value: number): string =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(value);
 
 const StatCard = ({
   iconElement,
@@ -31,17 +38,28 @@ const StatCard = ({
 );
 
 export default function DashboardOverview() {
-  const [stats] = useState(() =>
+  const [stats, setStats] = useState(() =>
     typeof window === 'undefined' ? null : getDashboardStats()
   );
-  const [tasks] = useState(() =>
+  const [tasks, setTasks] = useState(() =>
     typeof window === 'undefined' ? [] : getFarmTasks()
   );
-  const [taskStats] = useState(() =>
+  const [taskStats, setTaskStats] = useState(() =>
     typeof window === 'undefined' ? { completed: 0, remaining: 0 } : getTaskStats()
   );
 
   const isHydrated = useHydrated();
+
+  useEffect(() => {
+    const refreshStats = () => {
+      setStats(getDashboardStats());
+      setTasks(getFarmTasks());
+      setTaskStats(getTaskStats());
+    };
+
+    window.addEventListener('coopkeeper-data-updated', refreshStats);
+    return () => window.removeEventListener('coopkeeper-data-updated', refreshStats);
+  }, []);
 
   if (!isHydrated || !stats) return null;
 
@@ -153,8 +171,13 @@ export default function DashboardOverview() {
           color="bg-blue-50 border-blue-100 text-blue-900"
         />
 
-        {/* Placeholder for 8th stat */}
-        <div />
+        {/* Expenses This Month */}
+        <StatCard
+          iconElement={<Wallet className="w-5 h-5" />}
+          label="Expenses This Month"
+          value={formatUSD(stats.expensesThisMonth)}
+          color="bg-lime-50 border-lime-100 text-lime-900"
+        />
       </div>
     </div>
   );

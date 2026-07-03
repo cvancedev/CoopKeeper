@@ -3,6 +3,7 @@ import {
   getTodayDateString,
   getCurrentLocalDateTimeString,
   parseLocalDate,
+  parseLocalDateTime,
   getThisWeekRange,
 } from './dateUtils';
 
@@ -16,6 +17,7 @@ const defaultAppData: AppData = {
   hens: { hens: [] },
   weights: { entries: [] },
   health: { entries: [] },
+  expenses: { entries: [] },
   tasks: { tasks: [] },
 };
 
@@ -36,6 +38,7 @@ export function getAppData(): AppData {
       hens: { hens: [...(parsed.hens?.hens ?? [])] },
       weights: { entries: [...(parsed.weights?.entries ?? [])] },
       health: { entries: [...(parsed.health?.entries ?? [])] },
+      expenses: { entries: [...(parsed.expenses?.entries ?? [])] },
       tasks: {
         tasks: [...(parsed.tasks?.tasks ?? [])],
         lastResetDate: parsed.tasks?.lastResetDate,
@@ -58,6 +61,7 @@ export function saveAppData(data: AppData): void {
   
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    window.dispatchEvent(new Event('coopkeeper-data-updated'));
   } catch (error) {
     console.error('Error writing to localStorage:', error);
   }
@@ -279,6 +283,44 @@ export function getHenHealthEntries(henId: string): AppData['health']['entries']
   return getHealthEntries().filter(e => e.henId === henId);
 }
 
+// Expense Tracker utilities
+export function addExpense(
+  date: string,
+  category: 'Feed' | 'Bedding' | 'Medication' | 'Vet' | 'Supplies' | 'Equipment' | 'Other',
+  description: string,
+  amount: number,
+  notes: string = ''
+): void {
+  const data = getAppData();
+  data.expenses.entries.push({
+    id: Date.now().toString(),
+    date,
+    category,
+    description,
+    amount,
+    notes: notes || undefined,
+    createdAt: getCurrentLocalDateTimeString(),
+  });
+  saveAppData(data);
+}
+
+export function removeExpense(id: string): void {
+  const data = getAppData();
+  data.expenses.entries = data.expenses.entries.filter(e => e.id !== id);
+  saveAppData(data);
+}
+
+export function getExpenses(): AppData['expenses']['entries'] {
+  const entries = getAppData().expenses?.entries ?? [];
+  return [...entries].sort(
+    (a, b) => {
+      const aCreated = a.createdAt ? parseLocalDateTime(a.createdAt).getTime() : parseLocalDate(a.date).getTime();
+      const bCreated = b.createdAt ? parseLocalDateTime(b.createdAt).getTime() : parseLocalDate(b.date).getTime();
+      return bCreated - aCreated;
+    }
+  );
+}
+
 // Farm Tasks utilities
 function resetDailyTasksIfNeeded(data: AppData): void {
   const today = getTodayDateString();
@@ -374,6 +416,18 @@ export function getDashboardStats() {
     (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
   )[0];
 
+  // Expenses This Month
+  const currentMonth = new Date();
+  const expensesThisMonth = data.expenses.entries
+    .filter(expense => {
+      const expenseDate = parseLocalDate(expense.date);
+      return (
+        expenseDate.getFullYear() === currentMonth.getFullYear() &&
+        expenseDate.getMonth() === currentMonth.getMonth()
+      );
+    })
+    .reduce((sum, expense) => sum + expense.amount, 0);
+
   return {
     totalHens,
     eggsToday,
@@ -382,5 +436,6 @@ export function getDashboardStats() {
     lastCleaningDate,
     feedLogsThisWeek,
     mostRecentWeight,
+    expensesThisMonth,
   };
 }

@@ -8,6 +8,7 @@ import WeightTracker from '@/components/WeightTracker';
 import HealthLog from '@/components/HealthLog';
 import DashboardOverview from '@/components/DashboardOverview';
 import FarmTasks from '@/components/FarmTasks';
+import ExpenseTracker from '@/components/ExpenseTracker';
 
 
 export default function Home() {
@@ -85,6 +86,13 @@ export default function Home() {
             <div className="md:col-span-2 lg:col-span-2">
               <div className="farm-card p-6 h-full">
                 <CleaningLog />
+              </div>
+            </div>
+
+            {/* Expense Tracker */}
+            <div className="md:col-span-2 lg:col-span-2">
+              <div className="farm-card p-6 h-full">
+                <ExpenseTracker />
               </div>
             </div>
 

@@ -80,6 +80,30 @@ export interface HealthData {
   entries: HealthEntry[];
 }
 
+// Expense Tracker Types
+export type ExpenseCategory =
+  | 'Feed'
+  | 'Bedding'
+  | 'Medication'
+  | 'Vet'
+  | 'Supplies'
+  | 'Equipment'
+  | 'Other';
+
+export interface ExpenseEntry {
+  id: string;
+  date: string;
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface ExpenseData {
+  entries: ExpenseEntry[];
+}
+
 // Farm Tasks Types
 export interface FarmTask {
   id: string;
@@ -101,5 +125,6 @@ export interface AppData {
   hens: HensData;
   weights: WeightData;
   health: HealthData;
+  expenses: ExpenseData;
   tasks: FarmTaskData;
 }
