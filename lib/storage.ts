@@ -144,7 +144,13 @@ export function getFeedEntries(): AppData['feed']['entries'] {
 }
 
 // Favorite Hens utilities
-export function addHen(name: string, breed: string, notes: string = '', hatchDate?: string): void {
+export function addHen(
+  name: string,
+  breed: string,
+  notes: string = '',
+  hatchDate?: string,
+  photoUrl?: string | null
+): void {
   const data = getAppData();
   data.hens.hens.push({
     id: Date.now().toString(),
@@ -153,6 +159,7 @@ export function addHen(name: string, breed: string, notes: string = '', hatchDat
     isFavorite: false,
     notes,
     hatchDate,
+    photoUrl: photoUrl ?? null,
   });
   saveAppData(data);
 }
@@ -177,6 +184,15 @@ export function updateHenNotes(id: string, notes: string): void {
   const hen = data.hens.hens.find(h => h.id === id);
   if (hen) {
     hen.notes = notes;
+    saveAppData(data);
+  }
+}
+
+export function updateHenPhoto(id: string, photoUrl: string | null): void {
+  const data = getAppData();
+  const hen = data.hens.hens.find(h => h.id === id);
+  if (hen) {
+    hen.photoUrl = photoUrl;
     saveAppData(data);
   }
 }
