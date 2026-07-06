@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ExpenseCategory } from '@/lib/types';
 import { addExpense, getExpenses, removeExpense } from '@/lib/storage';
 import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
-import { getTodayDateString, formatDate, parseLocalDate } from '@/lib/dateUtils';
+import { getTodayDateString, formatDate, isValidLocalDateString, parseLocalDate } from '@/lib/dateUtils';
 import { ReceiptText, Trash2, Calendar, DollarSign } from 'lucide-react';
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -72,19 +72,25 @@ export default function ExpenseTracker() {
 
   const handleAddExpense = () => {
     const parsedAmount = Number.parseFloat(amount);
+    const selectedDate = date.trim();
 
-    if (!description.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    if (
+      !description.trim() ||
+      !selectedDate ||
+      !isValidLocalDateString(selectedDate) ||
+      !Number.isFinite(parsedAmount) ||
+      parsedAmount <= 0
+    ) {
       return;
     }
 
     addExpense(
-      date,
+      selectedDate,
       category,
       description.trim(),
       parsedAmount,
       notes.trim()
     );
-    setDate(getTodayDateString());
     setCategory('Feed');
     setDescription('');
     setAmount('');

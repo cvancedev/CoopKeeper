@@ -37,6 +37,27 @@ export function parseLocalDate(dateString: string): Date {
 }
 
 /**
+ * Check whether a yyyy-mm-dd string is a real calendar date.
+ */
+export function isValidLocalDateString(dateString: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return false;
+  }
+
+  const [yearPart, monthPart, dayPart] = dateString.split('-');
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  const parsedDate = parseLocalDate(dateString);
+
+  return (
+    parsedDate.getFullYear() === year &&
+    parsedDate.getMonth() + 1 === month &&
+    parsedDate.getDate() === day
+  );
+}
+
+/**
  * Parse a yyyy-mm-ddTHH:mm:ss datetime string as local time
  */
 export function parseLocalDateTime(dateTimeString: string): Date {
