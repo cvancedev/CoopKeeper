@@ -3,6 +3,8 @@ export interface EggEntry {
   id: string;
   date: string;
   count: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface EggData {

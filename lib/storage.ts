@@ -3,6 +3,8 @@ import { APP_DATA_UPDATED_EVENT, APP_STORAGE_KEY, createDefaultAppData, normaliz
 import {
   getTodayDateString,
   getCurrentLocalDateTimeString,
+  isSameLocalDate,
+  isValidLocalDateString,
   parseLocalDate,
   parseLocalDateTime,
   getThisWeekRange,
@@ -55,23 +57,74 @@ export async function bootstrapCloudAppData(): Promise<void> {
 }
 
 // Egg Tracker utilities
-export function addEggEntry(count: number): void {
+function isThisMonth(dateString: string): boolean {
+  const date = parseLocalDate(dateString);
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
+function getEggEntryTimestamp(entry: AppData['eggs']['entries'][number]): number {
+  if (entry.updatedAt) {
+    return parseLocalDateTime(entry.updatedAt).getTime();
+  }
+
+  if (entry.createdAt) {
+    return parseLocalDateTime(entry.createdAt).getTime();
+  }
+
+  return parseLocalDate(entry.date).getTime();
+}
+
+export function addEggEntry(date: string, count: number): void {
+  if (!isValidLocalDateString(date) || !Number.isInteger(count) || count < 0) {
+    return;
+  }
+
   const data = getAppData();
-  const today = getTodayDateString();
-  
-  // Check if entry for today exists
-  const existingIndex = data.eggs.entries.findIndex(e => e.date === today);
-  
+  const now = getCurrentLocalDateTimeString();
+  const existingIndex = data.eggs.entries.findIndex(entry => entry.date === date);
+
   if (existingIndex !== -1) {
-    data.eggs.entries[existingIndex].count += count;
+    data.eggs.entries[existingIndex].count = count;
+    data.eggs.entries[existingIndex].updatedAt = now;
   } else {
     data.eggs.entries.push({
       id: Date.now().toString(),
-      date: today,
+      date,
       count,
+      createdAt: now,
+      updatedAt: now,
     });
   }
   
+  saveAppData(data);
+}
+
+export function updateEggEntry(id: string, date: string, count: number): void {
+  if (!isValidLocalDateString(date) || !Number.isInteger(count) || count < 0) {
+    return;
+  }
+
+  const data = getAppData();
+  const now = getCurrentLocalDateTimeString();
+  const entryIndex = data.eggs.entries.findIndex(entry => entry.id === id);
+
+  if (entryIndex === -1) {
+    return;
+  }
+
+  const conflictingIndex = data.eggs.entries.findIndex(entry => entry.date === date && entry.id !== id);
+
+  if (conflictingIndex !== -1) {
+    data.eggs.entries[conflictingIndex].count = count;
+    data.eggs.entries[conflictingIndex].updatedAt = now;
+    data.eggs.entries.splice(entryIndex, 1);
+  } else {
+    data.eggs.entries[entryIndex].date = date;
+    data.eggs.entries[entryIndex].count = count;
+    data.eggs.entries[entryIndex].updatedAt = now;
+  }
+
   saveAppData(data);
 }
 
@@ -82,7 +135,9 @@ export function removeEggEntry(id: string): void {
 }
 
 export function getEggEntries(): AppData['eggs']['entries'] {
-  return getAppData().eggs.entries;
+  return [...getAppData().eggs.entries].sort(
+    (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime() || getEggEntryTimestamp(b) - getEggEntryTimestamp(a)
+  );
 }
 
 export function getWeeklyEggTotal(): number {
@@ -92,6 +147,38 @@ export function getWeeklyEggTotal(): number {
   return data.eggs.entries
     .filter(entry => entry.date >= weekStart)
     .reduce((sum, entry) => sum + entry.count, 0);
+}
+
+export function getEggTotals() {
+  const data = getAppData();
+  const [weekStart] = getThisWeekRange();
+  const now = new Date();
+
+  return data.eggs.entries.reduce(
+    (totals, entry) => {
+      totals.lifetime += entry.count;
+
+      if (isSameLocalDate(entry.date, now)) {
+        totals.today += entry.count;
+      }
+
+      if (entry.date >= weekStart) {
+        totals.week += entry.count;
+      }
+
+      if (isThisMonth(entry.date)) {
+        totals.month += entry.count;
+      }
+
+      return totals;
+    },
+    {
+      today: 0,
+      week: 0,
+      month: 0,
+      lifetime: 0,
+    }
+  );
 }
 
 // Cleaning Log utilities
@@ -382,21 +469,12 @@ export function getTaskStats(): { completed: number; remaining: number } {
 // Dashboard utilities
 export function getDashboardStats() {
   const data = getAppData();
-  const today = getTodayDateString();
   const [weekStart] = getThisWeekRange();
 
   // Total Hens
   const totalHens = data.hens.hens.length;
 
-  // Eggs Today
-  const eggsToday = data.eggs.entries
-    .filter(e => e.date === today)
-    .reduce((sum, e) => sum + e.count, 0);
-
-  // Eggs This Week
-  const eggsThisWeek = data.eggs.entries
-    .filter(e => e.date >= weekStart)
-    .reduce((sum, e) => sum + e.count, 0);
+  const eggTotals = getEggTotals();
 
   // Active Health Cases (Watching or Treated)
   const activeHealthCases = data.health.entries.filter(
@@ -433,8 +511,10 @@ export function getDashboardStats() {
 
   return {
     totalHens,
-    eggsToday,
-    eggsThisWeek,
+    eggsToday: eggTotals.today,
+    eggsThisWeek: eggTotals.week,
+    eggsThisMonth: eggTotals.month,
+    lifetimeEggs: eggTotals.lifetime,
     activeHealthCases,
     lastCleaningDate,
     feedLogsThisWeek,

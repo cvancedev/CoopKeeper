@@ -119,6 +119,22 @@ export default function DashboardOverview() {
           color="bg-yellow-50 border-yellow-100 text-yellow-900"
         />
 
+        {/* Eggs This Month */}
+        <StatCard
+          iconElement={<Egg className="w-5 h-5" />}
+          label="Eggs This Month"
+          value={stats.eggsThisMonth}
+          color="bg-orange-50 border-orange-100 text-orange-900"
+        />
+
+        {/* Lifetime Eggs */}
+        <StatCard
+          iconElement={<Egg className="w-5 h-5" />}
+          label="Lifetime Eggs"
+          value={stats.lifetimeEggs}
+          color="bg-amber-100 border-amber-200 text-amber-950"
+        />
+
         {/* Active Health Cases */}
         <StatCard
           iconElement={<Heart className="w-5 h-5" />}

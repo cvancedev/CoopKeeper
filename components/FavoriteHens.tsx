@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Hen } from '@/lib/types';
 import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import {
@@ -34,9 +35,12 @@ function readFileAsDataUrl(file: File): Promise<string> {
 function HenPhoto({ photoUrl, name }: { photoUrl?: string | null; name: string }) {
   if (photoUrl) {
     return (
-      <img
+      <Image
         src={photoUrl}
         alt={name}
+        width={56}
+        height={56}
+        unoptimized
         className="h-14 w-14 rounded-full object-cover border-2 border-pink-100 bg-pink-50 shrink-0"
       />
     );
@@ -224,6 +228,7 @@ export default function FavoriteHens() {
                 key={newPhotoInputKey}
                 type="file"
                 accept="image/*"
+                capture="environment"
                 onChange={async e => {
                   const file = e.target.files?.[0] ?? null;
                   await handlePhotoFile(file, setNewPhotoUrl, setNewPhotoError);
@@ -231,7 +236,7 @@ export default function FavoriteHens() {
                 className="block w-full text-xs text-pink-700 file:mr-3 file:rounded-lg file:border-0 file:bg-pink-700 file:px-3 file:py-2 file:text-white hover:file:bg-pink-800"
               />
               <p className="mt-1 text-[11px] text-pink-600">
-                Image only, up to 500 KB. Saved locally as a data URL.
+                Take a photo with your camera or choose one from your gallery. Image only, up to 500 KB.
               </p>
               {newPhotoError && <p className="mt-1 text-[11px] text-red-600">{newPhotoError}</p>}
             </div>
@@ -352,6 +357,7 @@ export default function FavoriteHens() {
                           key={editingPhotoInputKey}
                           type="file"
                           accept="image/*"
+                          capture="environment"
                           onChange={async e => {
                             const file = e.target.files?.[0] ?? null;
                             await handlePhotoFile(file, setEditingPhotoUrl, setEditingPhotoError, setEditingPhotoSelected);
@@ -359,7 +365,7 @@ export default function FavoriteHens() {
                           className="block w-full text-xs text-pink-700 file:mr-3 file:rounded-lg file:border-0 file:bg-pink-700 file:px-3 file:py-2 file:text-white hover:file:bg-pink-800"
                         />
                         <p className="mt-1 text-[11px] text-pink-600">
-                          Leave it blank to keep the current photo.
+                          Take a photo with your camera or choose one from your gallery. Leave it blank to keep the current photo.
                         </p>
                       </div>
                     </div>

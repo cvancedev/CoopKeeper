@@ -1,4 +1,18 @@
 import type { AppData } from './types';
+import { getTodayDateString } from './dateUtils';
+
+function normalizeEggEntry(entry: Partial<AppData['eggs']['entries'][number]>): AppData['eggs']['entries'][number] {
+  const date = entry.date ?? getTodayDateString();
+  const createdAt = entry.createdAt ?? `${date}T00:00:00`;
+
+  return {
+    id: entry.id ?? Date.now().toString(),
+    date,
+    count: Number.isFinite(entry.count) ? Number(entry.count) : 0,
+    createdAt,
+    updatedAt: entry.updatedAt ?? createdAt,
+  };
+}
 
 export const APP_STORAGE_KEY = 'coopkeeper-data';
 export const APP_DATA_UPDATED_EVENT = 'coopkeeper-data-updated';
@@ -18,7 +32,7 @@ export function createDefaultAppData(): AppData {
 
 export function normalizeAppData(rawData: Partial<AppData> | null | undefined): AppData {
   return {
-    eggs: { entries: [...(rawData?.eggs?.entries ?? [])] },
+    eggs: { entries: [...(rawData?.eggs?.entries ?? []).map(entry => normalizeEggEntry(entry))] },
     cleaning: { entries: [...(rawData?.cleaning?.entries ?? [])] },
     feed: { entries: [...(rawData?.feed?.entries ?? [])] },
     hens: { hens: [...(rawData?.hens?.hens ?? [])] },
