@@ -1,25 +1,57 @@
 'use client';
 
 import { useState } from 'react';
-import { getCleaningEntries, addCleaningEntry, removeCleaningEntry } from '@/lib/storage';
+import {
+  getCleaningEntries,
+  addCleaningEntry,
+  removeCleaningEntry,
+  updateCleaningEntry,
+} from '@/lib/storage';
 import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { formatDate } from '@/lib/dateUtils';
-import { Droplets, Trash2, Clock } from 'lucide-react';
+import { Droplets, Trash2, Clock, Edit2 } from 'lucide-react';
 
 export default function CleaningLog() {
   const entries = useSyncedStorageValue(getCleaningEntries);
   const [notes, setNotes] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const isHydrated = useHydrated();
 
   const handleAddEntry = () => {
     if (notes.trim()) {
-      addCleaningEntry(notes);
+      if (editingId) {
+        updateCleaningEntry(editingId, notes);
+        setEditingId(null);
+      } else {
+        addCleaningEntry(notes);
+      }
+
       setNotes('');
     }
   };
 
   const handleRemove = (id: string) => {
     removeCleaningEntry(id);
+
+    if (editingId === id) {
+      setEditingId(null);
+      setNotes('');
+    }
+  };
+
+  const handleEditStart = (id: string) => {
+    const entry = entries.find(item => item.id === id);
+    if (!entry) {
+      return;
+    }
+
+    setEditingId(id);
+    setNotes(entry.notes);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setNotes('');
   };
 
   if (!isHydrated) return null;
@@ -44,8 +76,16 @@ export default function CleaningLog() {
             onClick={handleAddEntry}
             className="mt-2 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 active:scale-95 transition font-medium w-full"
           >
-            Log Entry
+            {editingId ? 'Save Changes' : 'Log Entry'}
           </button>
+          {editingId && (
+            <button
+              onClick={handleCancelEdit}
+              className="mt-2 px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 active:scale-95 transition font-medium w-full"
+            >
+              Cancel
+            </button>
+          )}
         </div>
 
         <div className="max-h-64 overflow-y-auto">
@@ -67,6 +107,12 @@ export default function CleaningLog() {
                       </div>
                       <p className="text-green-900 text-sm wrap-break-words">{entry.notes}</p>
                     </div>
+                    <button
+                      onClick={() => handleEditStart(entry.id)}
+                      className="text-green-600 hover:text-green-800 p-1 hover:bg-green-50 rounded transition shrink-0"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => handleRemove(entry.id)}
                       className="text-green-600 hover:text-red-600 p-1 hover:bg-red-50 rounded transition shrink-0"

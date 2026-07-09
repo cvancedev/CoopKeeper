@@ -11,10 +11,14 @@ import HealthLog from '@/components/HealthLog';
 import DashboardOverview from '@/components/DashboardOverview';
 import FarmTasks from '@/components/FarmTasks';
 import ExpenseTracker from '@/components/ExpenseTracker';
+import BackupRestore from '@/components/BackupRestore';
 import { bootstrapCloudAppData } from '@/lib/storage';
+import { useCloudSyncStatus } from '@/lib/hooks';
 
 
 export default function Home() {
+  const syncStatus = useCloudSyncStatus();
+
   useEffect(() => {
     void bootstrapCloudAppData();
   }, []);
@@ -109,6 +113,13 @@ export default function Home() {
                 <HealthLog />
               </div>
             </div>
+
+            {/* Backup & Restore */}
+            <div className="md:col-span-2 lg:col-span-2">
+              <div className="farm-card p-6 h-full">
+                <BackupRestore />
+              </div>
+            </div>
           </div>
 
           {/* Footer */}
@@ -117,6 +128,14 @@ export default function Home() {
               <p className="text-amber-900 text-sm font-medium">
                 💾 All your data is safely saved locally in your browser
               </p>
+              {syncStatus.bootstrapState === 'loading' && (
+                <p className="text-amber-800 text-xs mt-2">Cloud sync connecting...</p>
+              )}
+              {syncStatus.cloudSyncState === 'error' && (
+                <p className="text-red-700 text-xs mt-2">
+                  Cloud sync issue detected. Your data is still saved locally on this device.
+                </p>
+              )}
             </div>
           </div>
         </div>

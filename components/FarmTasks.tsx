@@ -1,13 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { getFarmTasks, addFarmTask, removeFarmTask, toggleFarmTask, getTaskStats } from '@/lib/storage';
+import {
+  getFarmTasks,
+  addFarmTask,
+  removeFarmTask,
+  toggleFarmTask,
+  updateFarmTaskTitle,
+  getTaskStats,
+} from '@/lib/storage';
 import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
-import { CheckCircle2, Circle, Trash2, Plus } from 'lucide-react';
+import { CheckCircle2, Circle, Trash2, Plus, Edit2, Check, X } from 'lucide-react';
 
 export default function FarmTasks() {
   const tasks = useSyncedStorageValue(getFarmTasks);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskTitle, setEditingTaskTitle] = useState('');
 
   const isHydrated = useHydrated();
 
@@ -24,6 +33,26 @@ export default function FarmTasks() {
 
   const handleRemove = (id: string) => {
     removeFarmTask(id);
+  };
+
+  const handleEditStart = (id: string, title: string) => {
+    setEditingTaskId(id);
+    setEditingTaskTitle(title);
+  };
+
+  const handleEditCancel = () => {
+    setEditingTaskId(null);
+    setEditingTaskTitle('');
+  };
+
+  const handleEditSave = () => {
+    if (!editingTaskId || !editingTaskTitle.trim()) {
+      return;
+    }
+
+    updateFarmTaskTitle(editingTaskId, editingTaskTitle);
+    setEditingTaskId(null);
+    setEditingTaskTitle('');
   };
 
   const { completed, remaining } = useSyncedStorageValue(getTaskStats);
@@ -98,6 +127,7 @@ export default function FarmTasks() {
                 <button
                   onClick={() => handleToggle(task.id)}
                   className="shrink-0 text-amber-700 hover:text-amber-900 transition"
+                  disabled={editingTaskId === task.id}
                 >
                   {task.completed ? (
                     <CheckCircle2 className="w-5 h-5 text-green-600" />
@@ -105,21 +135,63 @@ export default function FarmTasks() {
                     <Circle className="w-5 h-5" />
                   )}
                 </button>
-                <span
-                  className={`flex-1 text-sm font-medium transition ${
-                    task.completed
-                      ? 'line-through text-green-600'
-                      : 'text-amber-900'
-                  }`}
-                >
-                  {task.title}
-                </span>
-                <button
-                  onClick={() => handleRemove(task.id)}
-                  className="text-amber-600 hover:text-red-600 p-1 hover:bg-red-50 rounded transition shrink-0"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {editingTaskId === task.id ? (
+                  <>
+                    <input
+                      type="text"
+                      value={editingTaskTitle}
+                      onChange={e => setEditingTaskTitle(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          handleEditSave();
+                        }
+                        if (e.key === 'Escape') {
+                          handleEditCancel();
+                        }
+                      }}
+                      className="flex-1 min-w-0 px-2 py-1 border border-amber-200 rounded focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 text-sm bg-white text-amber-900"
+                    />
+                    <button
+                      onClick={handleEditSave}
+                      className="text-amber-700 hover:text-green-700 p-1 hover:bg-green-50 rounded transition shrink-0"
+                      aria-label="Save task"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={handleEditCancel}
+                      className="text-amber-700 hover:text-gray-700 p-1 hover:bg-gray-100 rounded transition shrink-0"
+                      aria-label="Cancel task edit"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className={`flex-1 text-sm font-medium transition ${
+                        task.completed
+                          ? 'line-through text-green-600'
+                          : 'text-amber-900'
+                      }`}
+                    >
+                      {task.title}
+                    </span>
+                    <button
+                      onClick={() => handleEditStart(task.id, task.title)}
+                      className="text-amber-600 hover:text-amber-900 p-1 hover:bg-amber-50 rounded transition shrink-0"
+                      aria-label="Edit task"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleRemove(task.id)}
+                      className="text-amber-600 hover:text-red-600 p-1 hover:bg-red-50 rounded transition shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>

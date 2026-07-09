@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { ExpenseCategory } from '@/lib/types';
-import { addExpense, getExpenses, removeExpense } from '@/lib/storage';
+import { addExpense, getExpenses, removeExpense, updateExpense } from '@/lib/storage';
 import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { getTodayDateString, formatDate, isValidLocalDateString, parseLocalDate } from '@/lib/dateUtils';
-import { ReceiptText, Trash2, Calendar, DollarSign } from 'lucide-react';
+import { ReceiptText, Trash2, Calendar, DollarSign, Edit2 } from 'lucide-react';
 
 const CATEGORIES: ExpenseCategory[] = [
   'Feed',
@@ -45,6 +45,7 @@ export default function ExpenseTracker() {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const isHydrated = useHydrated();
 
@@ -84,13 +85,27 @@ export default function ExpenseTracker() {
       return;
     }
 
-    addExpense(
-      selectedDate,
-      category,
-      description.trim(),
-      parsedAmount,
-      notes.trim()
-    );
+    if (editingId) {
+      updateExpense(
+        editingId,
+        selectedDate,
+        category,
+        description.trim(),
+        parsedAmount,
+        notes.trim()
+      );
+      setEditingId(null);
+    } else {
+      addExpense(
+        selectedDate,
+        category,
+        description.trim(),
+        parsedAmount,
+        notes.trim()
+      );
+    }
+
+    setDate(getTodayDateString());
     setCategory('Feed');
     setDescription('');
     setAmount('');
@@ -99,6 +114,38 @@ export default function ExpenseTracker() {
 
   const handleRemove = (id: string) => {
     removeExpense(id);
+
+    if (editingId === id) {
+      setEditingId(null);
+      setDate(getTodayDateString());
+      setCategory('Feed');
+      setDescription('');
+      setAmount('');
+      setNotes('');
+    }
+  };
+
+  const handleEditStart = (id: string) => {
+    const entry = entries.find(item => item.id === id);
+    if (!entry) {
+      return;
+    }
+
+    setEditingId(id);
+    setDate(entry.date);
+    setCategory(entry.category);
+    setDescription(entry.description);
+    setAmount(entry.amount.toString());
+    setNotes(entry.notes ?? '');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setDate(getTodayDateString());
+    setCategory('Feed');
+    setDescription('');
+    setAmount('');
+    setNotes('');
   };
 
   if (!isHydrated) return null;
@@ -188,8 +235,16 @@ export default function ExpenseTracker() {
           onClick={handleAddExpense}
           className="w-full px-4 py-2 bg-emerald-700 text-white rounded-lg hover:bg-emerald-800 active:scale-95 transition text-sm font-medium"
         >
-          Add Expense
+          {editingId ? 'Save Changes' : 'Add Expense'}
         </button>
+        {editingId && (
+          <button
+            onClick={handleCancelEdit}
+            className="w-full mt-2 px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 active:scale-95 transition text-sm font-medium"
+          >
+            Cancel
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-lg border border-lime-100 p-4 mb-4">
@@ -273,6 +328,12 @@ export default function ExpenseTracker() {
                     )}
                   </div>
 
+                  <button
+                    onClick={() => handleEditStart(entry.id)}
+                    className="text-emerald-600 hover:text-emerald-800 p-1 hover:bg-emerald-50 rounded transition shrink-0"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => handleRemove(entry.id)}
                     className="text-emerald-600 hover:text-red-600 p-1 hover:bg-red-50 rounded transition shrink-0"

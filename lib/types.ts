@@ -122,6 +122,7 @@ export interface FarmTaskData {
 
 // Combined App State
 export interface AppData {
+  schemaVersion?: number;
   eggs: EggData;
   cleaning: CleaningData;
   feed: FeedData;

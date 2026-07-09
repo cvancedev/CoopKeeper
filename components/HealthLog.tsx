@@ -6,10 +6,11 @@ import {
   getHealthEntries,
   addHealthEntry,
   removeHealthEntry,
+  updateHealthEntry,
 } from '@/lib/storage';
 import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { getTodayDateString, formatDate } from '@/lib/dateUtils';
-import { Heart, Trash2, Calendar, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { Heart, Trash2, Calendar, AlertCircle, CheckCircle, Clock, Edit2, X } from 'lucide-react';
 
 const CATEGORIES = ['Illness', 'Injury', 'Medication', 'Vaccine', 'Checkup', 'Other'];
 const STATUSES = ['Watching', 'Treated', 'Recovered'];
@@ -61,16 +62,55 @@ export default function HealthLog() {
   const [followUpDate, setFollowUpDate] = useState('');
   const [status, setStatus] = useState(STATUSES[0]);
   const [notes, setNotes] = useState('');
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editingEntryHenName, setEditingEntryHenName] = useState('');
 
   const isHydrated = useHydrated();
+
+  const resetForm = () => {
+    setSelectedHenId('');
+    setDate(getTodayDateString());
+    setCategory(CATEGORIES[0]);
+    setSymptoms('');
+    setTreatment('');
+    setMedicationName('');
+    setDosage('');
+    setVetContacted(false);
+    setFollowUpDate('');
+    setStatus(STATUSES[0]);
+    setNotes('');
+    setEditingEntryId(null);
+    setEditingEntryHenName('');
+  };
 
   const handleAddEntry = () => {
     if (selectedHenId && symptoms.trim() && treatment.trim()) {
       const hen = hens.find(h => h.id === selectedHenId);
-      if (hen) {
+      const selectedHenName = hen?.name ?? editingEntryHenName;
+      if (selectedHenName) {
+        if (editingEntryId) {
+          updateHealthEntry(
+            editingEntryId,
+            selectedHenId,
+            selectedHenName,
+            date,
+            category as 'Illness' | 'Injury' | 'Medication' | 'Vaccine' | 'Checkup' | 'Other',
+            symptoms,
+            treatment,
+            status as 'Watching' | 'Treated' | 'Recovered',
+            vetContacted,
+            medicationName || undefined,
+            dosage || undefined,
+            followUpDate || undefined,
+            notes
+          );
+          resetForm();
+          return;
+        }
+
         addHealthEntry(
           selectedHenId,
-          hen.name,
+          selectedHenName,
           date,
           category as 'Illness' | 'Injury' | 'Medication' | 'Vaccine' | 'Checkup' | 'Other',
           symptoms,
@@ -82,19 +122,38 @@ export default function HealthLog() {
           followUpDate || undefined,
           notes
         );
-        setSymptoms('');
-        setTreatment('');
-        setMedicationName('');
-        setDosage('');
-        setVetContacted(false);
-        setFollowUpDate('');
-        setNotes('');
+        resetForm();
       }
     }
   };
 
   const handleRemove = (id: string) => {
     removeHealthEntry(id);
+
+    if (editingEntryId === id) {
+      resetForm();
+    }
+  };
+
+  const handleEditStart = (id: string) => {
+    const entry = entries.find(item => item.id === id);
+    if (!entry) {
+      return;
+    }
+
+    setEditingEntryId(entry.id);
+    setEditingEntryHenName(entry.henName);
+    setSelectedHenId(entry.henId);
+    setDate(entry.date);
+    setCategory(entry.category);
+    setSymptoms(entry.symptoms);
+    setTreatment(entry.treatment);
+    setMedicationName(entry.medicationName ?? '');
+    setDosage(entry.dosage ?? '');
+    setVetContacted(entry.vetContacted);
+    setFollowUpDate(entry.followUpDate ?? '');
+    setStatus(entry.status);
+    setNotes(entry.notes);
   };
 
   if (!isHydrated) return null;
@@ -108,7 +167,7 @@ export default function HealthLog() {
 
       <div className="bg-linear-to-br from-teal-50 to-emerald-50 rounded-lg p-4 border border-teal-100 mb-4">
         <h3 className="font-semibold text-teal-900 mb-3 text-sm uppercase tracking-wide">
-          Add Health Record
+          {editingEntryId ? 'Edit Health Record' : 'Add Health Record'}
         </h3>
 
         {hens.length === 0 ? (
@@ -126,6 +185,9 @@ export default function HealthLog() {
                   className="w-full px-3 py-2 border border-teal-200 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200 text-sm bg-white text-teal-900 transition"
                 >
                   <option value="">Select a hen...</option>
+                  {editingEntryId && selectedHenId && !hens.some(hen => hen.id === selectedHenId) && (
+                    <option value={selectedHenId}>{editingEntryHenName}</option>
+                  )}
                   {hens.map(hen => (
                     <option key={hen.id} value={hen.id}>
                       {hen.name}
@@ -279,8 +341,17 @@ export default function HealthLog() {
               onClick={handleAddEntry}
               className="w-full px-4 py-2 bg-teal-700 text-white rounded-lg hover:bg-teal-800 active:scale-95 transition text-sm font-medium"
             >
-              Log Health Record
+              {editingEntryId ? 'Save Changes' : 'Log Health Record'}
             </button>
+            {editingEntryId && (
+              <button
+                onClick={resetForm}
+                className="w-full mt-2 px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 active:scale-95 transition text-sm font-medium flex items-center justify-center gap-1"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            )}
           </>
         )}
       </div>
@@ -315,12 +386,20 @@ export default function HealthLog() {
                       {formatDate(entry.date)}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleRemove(entry.id)}
-                    className="text-teal-600 hover:text-red-600 p-1 hover:bg-red-50 rounded transition shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleEditStart(entry.id)}
+                      className="text-teal-600 hover:text-teal-800 p-1 hover:bg-teal-50 rounded transition shrink-0"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleRemove(entry.id)}
+                      className="text-teal-600 hover:text-red-600 p-1 hover:bg-red-50 rounded transition shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {entry.symptoms && (

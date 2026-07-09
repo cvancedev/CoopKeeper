@@ -1,5 +1,13 @@
 import { AppData } from './types';
-import { APP_DATA_UPDATED_EVENT, APP_STORAGE_KEY, createDefaultAppData, normalizeAppData } from './appData';
+import {
+  APP_DATA_UPDATED_EVENT,
+  APP_SCHEMA_VERSION,
+  APP_STORAGE_KEY,
+  APP_SYNC_STATUS_EVENT,
+  createDefaultAppData,
+  createRecordId,
+  normalizeAppData,
+} from './appData';
 import {
   getTodayDateString,
   getCurrentLocalDateTimeString,
@@ -9,51 +17,380 @@ import {
   parseLocalDateTime,
   getThisWeekRange,
 } from './dateUtils';
-import { saveAppDataToFirestore, loadAppDataFromFirestore } from './firestore';
+import {
+  APP_SECTIONS,
+  type AppSectionKey,
+  canUseFirestore,
+  loadAppDataFromFirestore,
+  saveAppDataSectionsToFirestore,
+} from './firestore';
 
 const defaultAppData: AppData = createDefaultAppData();
 
-// Get all app data from localStorage
-export function getAppData(): AppData {
-  if (typeof window === 'undefined') return defaultAppData;
-  
-  try {
-    const data = localStorage.getItem(APP_STORAGE_KEY);
-    if (!data) return defaultAppData;
+type BootstrapState = 'idle' | 'loading' | 'ready' | 'error';
+type CloudSyncState = 'idle' | 'queued' | 'syncing' | 'error';
 
-    const appData = normalizeAppData(JSON.parse(data));
-    
-    // Reset task completion status if it's a new day
-    resetDailyTasksIfNeeded(appData);
-    
-    return appData;
+interface PendingCloudWrite {
+  data: AppData;
+  sections: Set<AppSectionKey>;
+}
+
+export interface CloudSyncStatus {
+  bootstrapState: BootstrapState;
+  cloudSyncState: CloudSyncState;
+  firestoreEnabled: boolean;
+  pendingSectionCount: number;
+  lastSyncedAt: string | null;
+  lastError: string | null;
+}
+
+let bootstrapPromise: Promise<void> | null = null;
+let pendingCloudWrite: PendingCloudWrite | null = null;
+
+let syncStatus: CloudSyncStatus = {
+  bootstrapState: 'idle',
+  cloudSyncState: 'idle',
+  firestoreEnabled: false,
+  pendingSectionCount: 0,
+  lastSyncedAt: null,
+  lastError: null,
+};
+
+function isBrowser(): boolean {
+  return typeof window !== 'undefined';
+}
+
+function isCloudSyncEnabled(): boolean {
+  return isBrowser() && canUseFirestore();
+}
+
+function emitSyncStatus(): void {
+  if (!isBrowser()) return;
+  window.dispatchEvent(new Event(APP_SYNC_STATUS_EVENT));
+}
+
+function setSyncStatus(partial: Partial<CloudSyncStatus>): void {
+  syncStatus = {
+    ...syncStatus,
+    ...partial,
+  };
+  emitSyncStatus();
+}
+
+function setSyncError(message: string, error?: unknown): void {
+  console.error(message, error);
+  setSyncStatus({
+    bootstrapState: syncStatus.bootstrapState === 'loading' ? 'error' : syncStatus.bootstrapState,
+    cloudSyncState: 'error',
+    lastError: message,
+  });
+}
+
+export function getCloudSyncStatus(): CloudSyncStatus {
+  return {
+    ...syncStatus,
+    firestoreEnabled: isCloudSyncEnabled(),
+    pendingSectionCount: pendingCloudWrite ? pendingCloudWrite.sections.size : 0,
+  };
+}
+
+function readLocalAppData(): AppData {
+  if (!isBrowser()) return defaultAppData;
+
+  try {
+    const raw = localStorage.getItem(APP_STORAGE_KEY);
+    if (!raw) return defaultAppData;
+
+    return normalizeAppData(JSON.parse(raw));
   } catch (error) {
     console.error('Error reading from localStorage:', error);
     return defaultAppData;
   }
 }
 
-// Save all app data to localStorage
-export function saveAppData(data: AppData): void {
-  if (typeof window === 'undefined') return;
-  
-  try {
-    localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(data));
-    window.dispatchEvent(new Event(APP_DATA_UPDATED_EVENT));
-    void saveAppDataToFirestore(data);
-  } catch (error) {
-    console.error('Error writing to localStorage:', error);
+function writeLocalAppData(data: AppData): void {
+  if (!isBrowser()) return;
+
+  localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(data));
+  window.dispatchEvent(new Event(APP_DATA_UPDATED_EVENT));
+}
+
+function isSectionEqual(current: unknown, previous: unknown): boolean {
+  return JSON.stringify(current) === JSON.stringify(previous);
+}
+
+function getChangedSections(previous: AppData, next: AppData): AppSectionKey[] {
+  return APP_SECTIONS.filter(section => !isSectionEqual(previous[section], next[section]));
+}
+
+function combineById<T extends { id: string }>(base: T[], incoming: T[]): T[] {
+  const merged = new Map<string, T>();
+
+  for (const item of base) {
+    merged.set(item.id, item);
   }
+
+  for (const item of incoming) {
+    merged.set(item.id, item);
+  }
+
+  return [...merged.values()];
+}
+
+function mergeEggEntries(
+  remoteEntries: AppData['eggs']['entries'],
+  localEntries: AppData['eggs']['entries']
+): AppData['eggs']['entries'] {
+  const mergedByDate = new Map<string, AppData['eggs']['entries'][number]>();
+
+  const allEntries = [...remoteEntries, ...localEntries];
+
+  for (const entry of allEntries) {
+    const existing = mergedByDate.get(entry.date);
+    if (!existing) {
+      mergedByDate.set(entry.date, entry);
+      continue;
+    }
+
+    const existingUpdated = parseLocalDateTime(existing.updatedAt).getTime();
+    const incomingUpdated = parseLocalDateTime(entry.updatedAt).getTime();
+
+    if (incomingUpdated >= existingUpdated) {
+      mergedByDate.set(entry.date, entry);
+    }
+  }
+
+  return [...mergedByDate.values()];
+}
+
+function mergeAppDataForSafety(remoteData: AppData, localData: AppData): AppData {
+  return normalizeAppData({
+    ...remoteData,
+    schemaVersion: Math.max(remoteData.schemaVersion ?? APP_SCHEMA_VERSION, APP_SCHEMA_VERSION),
+    eggs: { entries: mergeEggEntries(remoteData.eggs.entries, localData.eggs.entries) },
+    cleaning: { entries: combineById(remoteData.cleaning.entries, localData.cleaning.entries) },
+    feed: { entries: combineById(remoteData.feed.entries, localData.feed.entries) },
+    hens: { hens: combineById(remoteData.hens.hens, localData.hens.hens) },
+    weights: { entries: combineById(remoteData.weights.entries, localData.weights.entries) },
+    health: { entries: combineById(remoteData.health.entries, localData.health.entries) },
+    expenses: { entries: combineById(remoteData.expenses.entries, localData.expenses.entries) },
+    tasks: {
+      tasks: combineById(remoteData.tasks.tasks, localData.tasks.tasks),
+      lastResetDate: remoteData.tasks.lastResetDate ?? localData.tasks.lastResetDate,
+    },
+  });
+}
+
+function queueCloudWrite(data: AppData, sections: AppSectionKey[]): void {
+  if (sections.length === 0) {
+    return;
+  }
+
+  if (!pendingCloudWrite) {
+    pendingCloudWrite = {
+      data,
+      sections: new Set(sections),
+    };
+  } else {
+    pendingCloudWrite.data = data;
+    for (const section of sections) {
+      pendingCloudWrite.sections.add(section);
+    }
+  }
+
+  setSyncStatus({
+    cloudSyncState: 'queued',
+    pendingSectionCount: pendingCloudWrite.sections.size,
+  });
+}
+
+async function flushPendingCloudWrite(): Promise<void> {
+  if (!pendingCloudWrite || syncStatus.bootstrapState !== 'ready') {
+    return;
+  }
+
+  const pending = pendingCloudWrite;
+  setSyncStatus({
+    cloudSyncState: 'syncing',
+    pendingSectionCount: pending.sections.size,
+  });
+
+  const result = await saveAppDataSectionsToFirestore(pending.data, [...pending.sections]);
+  if (!result.ok) {
+    const message = result.message ?? 'Failed to sync queued cloud changes.';
+    setSyncError(message, result.error);
+    return;
+  }
+
+  pendingCloudWrite = null;
+  setSyncStatus({
+    cloudSyncState: 'idle',
+    pendingSectionCount: 0,
+    lastError: null,
+    lastSyncedAt: getCurrentLocalDateTimeString(),
+  });
+}
+
+function hasAnyEntries(data: AppData): boolean {
+  return (
+    data.eggs.entries.length > 0 ||
+    data.cleaning.entries.length > 0 ||
+    data.feed.entries.length > 0 ||
+    data.hens.hens.length > 0 ||
+    data.weights.entries.length > 0 ||
+    data.health.entries.length > 0 ||
+    data.expenses.entries.length > 0 ||
+    data.tasks.tasks.length > 0
+  );
+}
+
+function ensureBootstrapStarted(): void {
+  if (!isCloudSyncEnabled()) {
+    return;
+  }
+
+  if (syncStatus.bootstrapState === 'loading' || syncStatus.bootstrapState === 'ready') {
+    return;
+  }
+
+  void bootstrapCloudAppData();
+}
+
+function applyDailyTaskResetIfNeeded(data: AppData): boolean {
+  const today = getTodayDateString();
+  const lastReset = data.tasks.lastResetDate;
+
+  if (lastReset === today) {
+    return false;
+  }
+
+  data.tasks.tasks = data.tasks.tasks.map(task => ({
+    ...task,
+    completed: false,
+  }));
+  data.tasks.lastResetDate = today;
+
+  return true;
+}
+
+function ensureDailyTaskReset(): void {
+  const currentData = getAppData();
+  if (!applyDailyTaskResetIfNeeded(currentData)) {
+    return;
+  }
+
+  saveAppData(currentData, ['tasks']);
+}
+
+// Get all app data from localStorage
+export function getAppData(): AppData {
+  return readLocalAppData();
+}
+
+// Save all app data to localStorage and queue/flush cloud sync safely
+export function saveAppData(data: AppData, changedSections?: AppSectionKey[]): void {
+  if (!isBrowser()) return;
+
+  const previousData = readLocalAppData();
+  const normalizedData = normalizeAppData({
+    ...data,
+    schemaVersion: APP_SCHEMA_VERSION,
+  });
+
+  writeLocalAppData(normalizedData);
+
+  if (!isCloudSyncEnabled()) {
+    setSyncStatus({
+      firestoreEnabled: false,
+      cloudSyncState: 'idle',
+      lastError: null,
+    });
+    return;
+  }
+
+  setSyncStatus({ firestoreEnabled: true });
+
+  const sections = changedSections ?? getChangedSections(previousData, normalizedData);
+  if (sections.length === 0) {
+    return;
+  }
+
+  if (syncStatus.bootstrapState !== 'ready') {
+    queueCloudWrite(normalizedData, sections);
+    ensureBootstrapStarted();
+    return;
+  }
+
+  queueCloudWrite(normalizedData, sections);
+  void flushPendingCloudWrite();
 }
 
 export async function bootstrapCloudAppData(): Promise<void> {
-  if (typeof window === 'undefined') return;
+  if (!isBrowser()) return;
 
-  const remoteData = await loadAppDataFromFirestore();
-  if (!remoteData) return;
+  if (bootstrapPromise) {
+    return bootstrapPromise;
+  }
 
-  localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(remoteData));
-  window.dispatchEvent(new Event(APP_DATA_UPDATED_EVENT));
+  if (!isCloudSyncEnabled()) {
+    setSyncStatus({
+      firestoreEnabled: false,
+      bootstrapState: 'ready',
+      cloudSyncState: 'idle',
+      lastError: null,
+    });
+    return;
+  }
+
+  setSyncStatus({
+    firestoreEnabled: true,
+    bootstrapState: 'loading',
+    cloudSyncState: pendingCloudWrite ? 'queued' : 'idle',
+    lastError: null,
+  });
+
+  bootstrapPromise = (async () => {
+    try {
+      const remoteData = await loadAppDataFromFirestore();
+
+      if (remoteData) {
+        const localData = readLocalAppData();
+        const mergedLocalData = pendingCloudWrite
+          ? mergeAppDataForSafety(localData, pendingCloudWrite.data)
+          : localData;
+        const nextData = mergeAppDataForSafety(remoteData, mergedLocalData);
+        writeLocalAppData(nextData);
+
+        if (pendingCloudWrite) {
+          pendingCloudWrite.data = nextData;
+        }
+      } else {
+        const localData = readLocalAppData();
+        if (hasAnyEntries(localData)) {
+          queueCloudWrite(localData, [...APP_SECTIONS]);
+        }
+      }
+
+      const afterBootstrapData = readLocalAppData();
+      if (applyDailyTaskResetIfNeeded(afterBootstrapData)) {
+        saveAppData(afterBootstrapData, ['tasks']);
+      }
+
+      setSyncStatus({
+        bootstrapState: 'ready',
+        cloudSyncState: pendingCloudWrite ? 'queued' : 'idle',
+        lastError: null,
+      });
+
+      await flushPendingCloudWrite();
+    } catch (error) {
+      setSyncError('Cloud bootstrap failed. Data continues to be saved locally.', error);
+    } finally {
+      bootstrapPromise = null;
+    }
+  })();
+
+  return bootstrapPromise;
 }
 
 // Egg Tracker utilities
@@ -89,15 +426,15 @@ export function addEggEntry(date: string, count: number): void {
     data.eggs.entries[existingIndex].updatedAt = now;
   } else {
     data.eggs.entries.push({
-      id: Date.now().toString(),
+      id: createRecordId(),
       date,
       count,
       createdAt: now,
       updatedAt: now,
     });
   }
-  
-  saveAppData(data);
+
+  saveAppData(data, ['eggs']);
 }
 
 export function updateEggEntry(id: string, date: string, count: number): void {
@@ -125,13 +462,13 @@ export function updateEggEntry(id: string, date: string, count: number): void {
     data.eggs.entries[entryIndex].updatedAt = now;
   }
 
-  saveAppData(data);
+  saveAppData(data, ['eggs']);
 }
 
 export function removeEggEntry(id: string): void {
   const data = getAppData();
   data.eggs.entries = data.eggs.entries.filter(e => e.id !== id);
-  saveAppData(data);
+  saveAppData(data, ['eggs']);
 }
 
 export function getEggEntries(): AppData['eggs']['entries'] {
@@ -143,7 +480,7 @@ export function getEggEntries(): AppData['eggs']['entries'] {
 export function getWeeklyEggTotal(): number {
   const data = getAppData();
   const [weekStart] = getThisWeekRange();
-  
+
   return data.eggs.entries
     .filter(entry => entry.date >= weekStart)
     .reduce((sum, entry) => sum + entry.count, 0);
@@ -185,17 +522,28 @@ export function getEggTotals() {
 export function addCleaningEntry(notes: string): void {
   const data = getAppData();
   data.cleaning.entries.push({
-    id: Date.now().toString(),
+    id: createRecordId(),
     date: getTodayDateString(),
     notes,
   });
-  saveAppData(data);
+  saveAppData(data, ['cleaning']);
 }
 
 export function removeCleaningEntry(id: string): void {
   const data = getAppData();
   data.cleaning.entries = data.cleaning.entries.filter(e => e.id !== id);
-  saveAppData(data);
+  saveAppData(data, ['cleaning']);
+}
+
+export function updateCleaningEntry(id: string, notes: string): void {
+  const data = getAppData();
+  const entry = data.cleaning.entries.find(e => e.id === id);
+  if (!entry) {
+    return;
+  }
+
+  entry.notes = notes;
+  saveAppData(data, ['cleaning']);
 }
 
 export function getCleaningEntries(): AppData['cleaning']['entries'] {
@@ -209,18 +557,30 @@ export function getCleaningEntries(): AppData['cleaning']['entries'] {
 export function addFeedEntry(feedType: string, notes: string): void {
   const data = getAppData();
   data.feed.entries.push({
-    id: Date.now().toString(),
+    id: createRecordId(),
     date: getTodayDateString(),
     feedType,
     notes,
   });
-  saveAppData(data);
+  saveAppData(data, ['feed']);
 }
 
 export function removeFeedEntry(id: string): void {
   const data = getAppData();
   data.feed.entries = data.feed.entries.filter(e => e.id !== id);
-  saveAppData(data);
+  saveAppData(data, ['feed']);
+}
+
+export function updateFeedEntry(id: string, feedType: string, notes: string): void {
+  const data = getAppData();
+  const entry = data.feed.entries.find(e => e.id === id);
+  if (!entry) {
+    return;
+  }
+
+  entry.feedType = feedType;
+  entry.notes = notes;
+  saveAppData(data, ['feed']);
 }
 
 export function getFeedEntries(): AppData['feed']['entries'] {
@@ -240,7 +600,7 @@ export function addHen(
 ): void {
   const data = getAppData();
   data.hens.hens.push({
-    id: Date.now().toString(),
+    id: createRecordId(),
     name,
     breed,
     isFavorite: false,
@@ -248,13 +608,13 @@ export function addHen(
     hatchDate,
     photoUrl: photoUrl ?? null,
   });
-  saveAppData(data);
+  saveAppData(data, ['hens']);
 }
 
 export function removeHen(id: string): void {
   const data = getAppData();
   data.hens.hens = data.hens.hens.filter(h => h.id !== id);
-  saveAppData(data);
+  saveAppData(data, ['hens']);
 }
 
 export function toggleHenFavorite(id: string): void {
@@ -262,7 +622,7 @@ export function toggleHenFavorite(id: string): void {
   const hen = data.hens.hens.find(h => h.id === id);
   if (hen) {
     hen.isFavorite = !hen.isFavorite;
-    saveAppData(data);
+    saveAppData(data, ['hens']);
   }
 }
 
@@ -271,7 +631,7 @@ export function updateHenNotes(id: string, notes: string): void {
   const hen = data.hens.hens.find(h => h.id === id);
   if (hen) {
     hen.notes = notes;
-    saveAppData(data);
+    saveAppData(data, ['hens']);
   }
 }
 
@@ -280,8 +640,39 @@ export function updateHenPhoto(id: string, photoUrl: string | null): void {
   const hen = data.hens.hens.find(h => h.id === id);
   if (hen) {
     hen.photoUrl = photoUrl;
-    saveAppData(data);
+    saveAppData(data, ['hens']);
   }
+}
+
+export function updateHen(
+  id: string,
+  name: string,
+  breed: string,
+  notes: string,
+  hatchDate?: string,
+  isFavorite?: boolean,
+  photoUrl?: string | null
+): void {
+  const data = getAppData();
+  const hen = data.hens.hens.find(h => h.id === id);
+  if (!hen) {
+    return;
+  }
+
+  hen.name = name;
+  hen.breed = breed;
+  hen.notes = notes;
+  hen.hatchDate = hatchDate;
+
+  if (typeof isFavorite === 'boolean') {
+    hen.isFavorite = isFavorite;
+  }
+
+  if (photoUrl !== undefined) {
+    hen.photoUrl = photoUrl;
+  }
+
+  saveAppData(data, ['hens']);
 }
 
 export function getHens(): AppData['hens']['hens'] {
@@ -296,18 +687,18 @@ export function getFavoriteHens(): AppData['hens']['hens'] {
 export function addWeightEntry(henName: string, weight: number): void {
   const data = getAppData();
   data.weights.entries.push({
-    id: Date.now().toString(),
+    id: createRecordId(),
     henName,
     date: getTodayDateString(),
     weight,
   });
-  saveAppData(data);
+  saveAppData(data, ['weights']);
 }
 
 export function removeWeightEntry(id: string): void {
   const data = getAppData();
   data.weights.entries = data.weights.entries.filter(e => e.id !== id);
-  saveAppData(data);
+  saveAppData(data, ['weights']);
 }
 
 export function getWeightEntries(): AppData['weights']['entries'] {
@@ -338,7 +729,7 @@ export function addHealthEntry(
 ): void {
   const data = getAppData();
   data.health.entries.push({
-    id: Date.now().toString(),
+    id: createRecordId(),
     henId,
     henName,
     date,
@@ -353,13 +744,50 @@ export function addHealthEntry(
     notes,
     createdAt: getCurrentLocalDateTimeString(),
   });
-  saveAppData(data);
+  saveAppData(data, ['health']);
 }
 
 export function removeHealthEntry(id: string): void {
   const data = getAppData();
   data.health.entries = data.health.entries.filter(e => e.id !== id);
-  saveAppData(data);
+  saveAppData(data, ['health']);
+}
+
+export function updateHealthEntry(
+  id: string,
+  henId: string,
+  henName: string,
+  date: string,
+  category: 'Illness' | 'Injury' | 'Medication' | 'Vaccine' | 'Checkup' | 'Other',
+  symptoms: string,
+  treatment: string,
+  status: 'Watching' | 'Treated' | 'Recovered',
+  vetContacted: boolean,
+  medicationName?: string,
+  dosage?: string,
+  followUpDate?: string,
+  notes: string = ''
+): void {
+  const data = getAppData();
+  const entry = data.health.entries.find(e => e.id === id);
+  if (!entry) {
+    return;
+  }
+
+  entry.henId = henId;
+  entry.henName = henName;
+  entry.date = date;
+  entry.category = category;
+  entry.symptoms = symptoms;
+  entry.treatment = treatment;
+  entry.status = status;
+  entry.vetContacted = vetContacted;
+  entry.medicationName = medicationName;
+  entry.dosage = dosage;
+  entry.followUpDate = followUpDate;
+  entry.notes = notes;
+
+  saveAppData(data, ['health']);
 }
 
 export function getHealthEntries(): AppData['health']['entries'] {
@@ -383,7 +811,7 @@ export function addExpense(
 ): void {
   const data = getAppData();
   data.expenses.entries.push({
-    id: Date.now().toString(),
+    id: createRecordId(),
     date,
     category,
     description,
@@ -391,13 +819,35 @@ export function addExpense(
     notes: notes || undefined,
     createdAt: getCurrentLocalDateTimeString(),
   });
-  saveAppData(data);
+  saveAppData(data, ['expenses']);
 }
 
 export function removeExpense(id: string): void {
   const data = getAppData();
   data.expenses.entries = data.expenses.entries.filter(e => e.id !== id);
-  saveAppData(data);
+  saveAppData(data, ['expenses']);
+}
+
+export function updateExpense(
+  id: string,
+  date: string,
+  category: 'Feed' | 'Bedding' | 'Medication' | 'Vet' | 'Supplies' | 'Equipment' | 'Other',
+  description: string,
+  amount: number,
+  notes: string = ''
+): void {
+  const data = getAppData();
+  const entry = data.expenses.entries.find(e => e.id === id);
+  if (!entry) {
+    return;
+  }
+
+  entry.date = date;
+  entry.category = category;
+  entry.description = description;
+  entry.amount = amount;
+  entry.notes = notes || undefined;
+  saveAppData(data, ['expenses']);
 }
 
 export function getExpenses(): AppData['expenses']['entries'] {
@@ -412,47 +862,52 @@ export function getExpenses(): AppData['expenses']['entries'] {
 }
 
 // Farm Tasks utilities
-function resetDailyTasksIfNeeded(data: AppData): void {
-  const today = getTodayDateString();
-  const lastReset = data.tasks.lastResetDate;
-  
-  if (lastReset !== today) {
-    // Reset all task completion status for new day
-    data.tasks.tasks = data.tasks.tasks.map(task => (
-      { ...task, completed: false }
-    ));
-    data.tasks.lastResetDate = today;
-    saveAppData(data);
-  }
-}
-
 export function addFarmTask(title: string): void {
+  ensureDailyTaskReset();
   const data = getAppData();
   data.tasks.tasks.push({
-    id: Date.now().toString(),
+    id: createRecordId(),
     title,
     completed: false,
     createdDate: getTodayDateString(),
   });
-  saveAppData(data);
+  saveAppData(data, ['tasks']);
 }
 
 export function removeFarmTask(id: string): void {
+  ensureDailyTaskReset();
   const data = getAppData();
   data.tasks.tasks = data.tasks.tasks.filter(t => t.id !== id);
-  saveAppData(data);
+  saveAppData(data, ['tasks']);
 }
 
 export function toggleFarmTask(id: string): void {
+  ensureDailyTaskReset();
   const data = getAppData();
   const task = data.tasks.tasks.find(t => t.id === id);
   if (task) {
     task.completed = !task.completed;
-    saveAppData(data);
+    saveAppData(data, ['tasks']);
+  }
+}
+
+export function updateFarmTaskTitle(id: string, title: string): void {
+  ensureDailyTaskReset();
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) {
+    return;
+  }
+
+  const data = getAppData();
+  const task = data.tasks.tasks.find(t => t.id === id);
+  if (task) {
+    task.title = trimmedTitle;
+    saveAppData(data, ['tasks']);
   }
 }
 
 export function getFarmTasks(): AppData['tasks']['tasks'] {
+  ensureDailyTaskReset();
   const data = getAppData();
   return data.tasks.tasks;
 }

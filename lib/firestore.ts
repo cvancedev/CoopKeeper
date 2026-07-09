@@ -1,9 +1,33 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { AppData } from './types';
-import { normalizeAppData } from './appData';
+import {
+  APP_DATA_UPDATED_EVENT,
+  APP_SCHEMA_VERSION,
+  APP_STORAGE_KEY,
+  normalizeAppData,
+} from './appData';
 import { getFirestoreDb, isFirebaseConfigured } from './firebase';
 
 const FARM_DOC_PATH = ['farms', 'demo-coopkeeper'] as const;
+
+export const APP_SECTIONS = [
+  'eggs',
+  'cleaning',
+  'feed',
+  'hens',
+  'weights',
+  'health',
+  'expenses',
+  'tasks',
+] as const;
+
+export type AppSectionKey = (typeof APP_SECTIONS)[number];
+
+export interface FirestoreSyncResult {
+  ok: boolean;
+  message?: string;
+  error?: unknown;
+}
 
 export function canUseFirestore(): boolean {
   return isFirebaseConfigured() && getFirestoreDb() !== null;
@@ -27,12 +51,33 @@ function removeUndefinedValues<T>(value: T): T {
   return value;
 }
 
-export async function loadAppDataFromFirestore(): Promise<AppData | null> {
+function getFarmDocRef() {
   const db = getFirestoreDb();
-  if (!db) return null;
+  return db ? doc(db, FARM_DOC_PATH[0], FARM_DOC_PATH[1]) : null;
+}
+
+function toSchemaVersion(value: number | undefined): number {
+  return typeof value === 'number' ? value : APP_SCHEMA_VERSION;
+}
+
+function buildSectionPayload(data: AppData, sections: AppSectionKey[]): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    schemaVersion: toSchemaVersion(data.schemaVersion),
+  };
+
+  for (const section of sections) {
+    payload[section] = removeUndefinedValues(data[section]);
+  }
+
+  return payload;
+}
+
+export async function loadAppDataFromFirestore(): Promise<AppData | null> {
+  const farmDoc = getFarmDocRef();
+  if (!farmDoc) return null;
 
   try {
-    const snapshot = await getDoc(doc(db, FARM_DOC_PATH[0], FARM_DOC_PATH[1]));
+    const snapshot = await getDoc(farmDoc);
     if (!snapshot.exists()) return null;
 
     return normalizeAppData(snapshot.data() as Partial<AppData>);
@@ -42,22 +87,43 @@ export async function loadAppDataFromFirestore(): Promise<AppData | null> {
   }
 }
 
-export async function saveAppDataToFirestore(data: AppData): Promise<void> {
-  const db = getFirestoreDb();
-  if (!db) return;
+export async function saveAppDataSectionsToFirestore(
+  data: AppData,
+  sections: AppSectionKey[]
+): Promise<FirestoreSyncResult> {
+  const farmDoc = getFarmDocRef();
+  if (!farmDoc) {
+    return { ok: false, message: 'Firestore is not configured.' };
+  }
+
+  const uniqueSections = [...new Set(sections)];
+  if (uniqueSections.length === 0) {
+    return { ok: true };
+  }
 
   try {
-    await setDoc(doc(db, FARM_DOC_PATH[0], FARM_DOC_PATH[1]), removeUndefinedValues(data));
+    const payload = buildSectionPayload(data, uniqueSections);
+    await setDoc(farmDoc, payload, { merge: true });
+    return { ok: true };
   } catch (error) {
     console.error('Error saving CoopKeeper data to Firestore:', error);
+    return {
+      ok: false,
+      message: 'Failed to save cloud data to Firestore.',
+      error,
+    };
   }
+}
+
+export async function saveAppDataToFirestore(data: AppData): Promise<FirestoreSyncResult> {
+  return saveAppDataSectionsToFirestore(data, [...APP_SECTIONS]);
 }
 
 export async function bootstrapFirestoreAppData(): Promise<AppData | null> {
   const remoteData = await loadAppDataFromFirestore();
   if (!remoteData || typeof window === 'undefined') return remoteData;
 
-  localStorage.setItem('coopkeeper-data', JSON.stringify(remoteData));
-  window.dispatchEvent(new Event('coopkeeper-data-updated'));
+  localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(remoteData));
+  window.dispatchEvent(new Event(APP_DATA_UPDATED_EVENT));
   return remoteData;
 }

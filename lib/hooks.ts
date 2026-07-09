@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { APP_DATA_UPDATED_EVENT } from './appData';
+import { APP_DATA_UPDATED_EVENT, APP_SYNC_STATUS_EVENT } from './appData';
+import { type CloudSyncStatus, getCloudSyncStatus } from './storage';
 
 /**
  * Returns false on the server (SSR) and true on the client after hydration.
@@ -31,4 +32,24 @@ export function useSyncedStorageValue<T>(getValue: () => T): T {
   }, [getValue]);
 
   return value;
+}
+
+/**
+ * Returns cloud sync status updates so sync failures are visible to users.
+ */
+export function useCloudSyncStatus(): CloudSyncStatus {
+  const [status, setStatus] = useState<CloudSyncStatus>(() => getCloudSyncStatus());
+
+  useEffect(() => {
+    const refresh = () => setStatus(getCloudSyncStatus());
+
+    refresh();
+    window.addEventListener(APP_SYNC_STATUS_EVENT, refresh);
+
+    return () => {
+      window.removeEventListener(APP_SYNC_STATUS_EVENT, refresh);
+    };
+  }, []);
+
+  return status;
 }

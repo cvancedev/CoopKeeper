@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { getFeedEntries, addFeedEntry, removeFeedEntry } from '@/lib/storage';
+import { getFeedEntries, addFeedEntry, removeFeedEntry, updateFeedEntry } from '@/lib/storage';
 import { useHydrated, useSyncedStorageValue } from '@/lib/hooks';
 import { formatDate } from '@/lib/dateUtils';
-import { Leaf, Trash2, Calendar } from 'lucide-react';
+import { Leaf, Trash2, Calendar, Edit2 } from 'lucide-react';
 
 const FEED_TYPES = ['Pellets', 'Scratch', 'Treats', 'Vegetables', 'Other'];
 
@@ -12,15 +12,46 @@ export default function FeedLog() {
   const entries = useSyncedStorageValue(getFeedEntries);
   const [feedType, setFeedType] = useState(FEED_TYPES[0]);
   const [notes, setNotes] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const isHydrated = useHydrated();
 
   const handleAddEntry = () => {
-    addFeedEntry(feedType, notes);
+    if (editingId) {
+      updateFeedEntry(editingId, feedType, notes);
+      setEditingId(null);
+    } else {
+      addFeedEntry(feedType, notes);
+    }
+
     setNotes('');
+    setFeedType(FEED_TYPES[0]);
   };
 
   const handleRemove = (id: string) => {
     removeFeedEntry(id);
+
+    if (editingId === id) {
+      setEditingId(null);
+      setFeedType(FEED_TYPES[0]);
+      setNotes('');
+    }
+  };
+
+  const handleEditStart = (id: string) => {
+    const entry = entries.find(item => item.id === id);
+    if (!entry) {
+      return;
+    }
+
+    setEditingId(id);
+    setFeedType(entry.feedType);
+    setNotes(entry.notes);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setFeedType(FEED_TYPES[0]);
+    setNotes('');
   };
 
   if (!isHydrated) return null;
@@ -60,8 +91,16 @@ export default function FeedLog() {
             onClick={handleAddEntry}
             className="mt-2 px-4 py-2 bg-yellow-700 text-white rounded-lg hover:bg-yellow-800 active:scale-95 transition font-medium w-full"
           >
-            Log Feed
+            {editingId ? 'Save Changes' : 'Log Feed'}
           </button>
+          {editingId && (
+            <button
+              onClick={handleCancelEdit}
+              className="mt-2 px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 active:scale-95 transition font-medium w-full"
+            >
+              Cancel
+            </button>
+          )}
         </div>
 
         <div className="max-h-64 overflow-y-auto">
@@ -90,6 +129,12 @@ export default function FeedLog() {
                         <p className="text-orange-900 text-sm wrap-break-words">{entry.notes}</p>
                       )}
                     </div>
+                    <button
+                      onClick={() => handleEditStart(entry.id)}
+                      className="text-yellow-600 hover:text-yellow-800 p-1 hover:bg-yellow-50 rounded transition shrink-0"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => handleRemove(entry.id)}
                       className="text-yellow-600 hover:text-red-600 p-1 hover:bg-red-50 rounded transition shrink-0"
